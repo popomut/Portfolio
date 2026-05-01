@@ -10,10 +10,25 @@ export type Transaction = {
   createdAt?: string | null;
 };
 
+export type Dividend = {
+  id: string;
+  ticker: string;
+  exDate: string;
+  payDate: string;
+  sharesHeld: number;
+  amountPerShare: number;
+  totalAmount: number;
+  withholdingTax: number;
+  currency: string;
+  notes?: string | null;
+  createdAt?: string | null;
+};
+
 export type PortfolioItem = {
   ticker: string;
   name: string;
   currentPrice: number;
+  currency: string;
   shares: number;
   avgCost: number;
   costBasis: number;
@@ -22,6 +37,8 @@ export type PortfolioItem = {
   pnlPct: number;
   irr: number | null;
   transactions: Transaction[];
+  dividends: Dividend[];
+  totalDividends: number;
 };
 
 export type PortfolioSummary = {
@@ -30,6 +47,7 @@ export type PortfolioSummary = {
   totalCostBasis: number;
   totalPnl: number;
   totalPnlPct: number;
+  totalDividends: number;
 };
 
 // XIRR via Newton's method
@@ -69,7 +87,9 @@ export function computePortfolioItem(
   ticker: string,
   name: string,
   currentPrice: number,
-  transactions: Transaction[]
+  transactions: Transaction[],
+  dividends: Dividend[] = [],
+  currency: string = 'USD'
 ): PortfolioItem {
   const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -100,12 +120,18 @@ export function computePortfolioItem(
     cashflows.push({ date: new Date(), amount: marketValue });
   }
 
+  for (const d of dividends) {
+    cashflows.push({ date: new Date(d.payDate), amount: d.totalAmount });
+  }
+
   const irr = xirr(cashflows);
+  const totalDividends = dividends.reduce((s, d) => s + d.totalAmount, 0);
 
   return {
     ticker,
     name,
     currentPrice,
+    currency,
     shares: totalShares,
     avgCost,
     costBasis,
@@ -113,7 +139,9 @@ export function computePortfolioItem(
     pnl,
     pnlPct,
     irr,
-    transactions: sorted
+    transactions: sorted,
+    dividends,
+    totalDividends
   };
 }
 
@@ -122,5 +150,6 @@ export function computePortfolioSummary(items: PortfolioItem[]): PortfolioSummar
   const totalCostBasis = items.reduce((s, i) => s + i.costBasis, 0);
   const totalPnl = totalMarketValue - totalCostBasis;
   const totalPnlPct = totalCostBasis > 0 ? (totalPnl / totalCostBasis) * 100 : 0;
-  return { items, totalMarketValue, totalCostBasis, totalPnl, totalPnlPct };
+  const totalDividends = items.reduce((s, i) => s + i.totalDividends, 0);
+  return { items, totalMarketValue, totalCostBasis, totalPnl, totalPnlPct, totalDividends };
 }

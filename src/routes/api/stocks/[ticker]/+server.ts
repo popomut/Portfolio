@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
-import { stock, transaction } from '$lib/server/db/schema';
+import { stock, transaction, dividend } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
 export const PATCH: RequestHandler = async ({ params, request }) => {
@@ -22,8 +22,9 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 export const DELETE: RequestHandler = async ({ params }) => {
   const ticker = params.ticker.toUpperCase();
 
-  // Delete all transactions for this ticker first
+  // Delete all related data for this ticker
   await db.delete(transaction).where(eq(transaction.ticker, ticker));
+  await db.delete(dividend).where(eq(dividend.ticker, ticker));
 
   // Delete the stock itself
   const [deleted] = await db.delete(stock).where(eq(stock.ticker, ticker)).returning();

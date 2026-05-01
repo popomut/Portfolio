@@ -39,6 +39,20 @@ await db.execute(`CREATE TABLE IF NOT EXISTS "transaction" (
   created_at TEXT
 )`);
 
+await db.execute(`CREATE TABLE IF NOT EXISTS dividend (
+  id TEXT PRIMARY KEY,
+  ticker TEXT NOT NULL,
+  ex_date TEXT NOT NULL,
+  pay_date TEXT NOT NULL,
+  shares_held REAL NOT NULL,
+  amount_per_share REAL NOT NULL,
+  total_amount REAL NOT NULL,
+  withholding_tax REAL NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  notes TEXT DEFAULT '',
+  created_at TEXT
+)`);
+
 // Seed nav items
 await db.execute('DELETE FROM nav_item');
 await db.execute({

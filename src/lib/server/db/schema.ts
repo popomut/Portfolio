@@ -34,3 +34,17 @@ export const transaction = sqliteTable('transaction', {
 	notes: text('notes').default(''),
 	createdAt: text('created_at').$defaultFn(() => new Date().toISOString())
 });
+
+export const dividend = sqliteTable('dividend', {
+	id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+	ticker: text('ticker').notNull(),
+	exDate: text('ex_date').notNull(),
+	payDate: text('pay_date').notNull(),
+	sharesHeld: real('shares_held').notNull(),
+	amountPerShare: real('amount_per_share').notNull(),
+	totalAmount: real('total_amount').notNull(),
+	withholdingTax: real('withholding_tax').notNull().default(0),
+	currency: text('currency').notNull().default('USD'),
+	notes: text('notes').default(''),
+	createdAt: text('created_at').$defaultFn(() => new Date().toISOString())
+});

@@ -31,6 +31,12 @@
 	let barChart:   ChartType | null = null;
 
 	const totalValue = $derived(items.reduce((s, i) => s + i.marketValue, 0));
+	
+	// Dynamic chart height based on number of items
+	// Bar chart needs ~35px per row, donut needs minimum 300px
+	const chartHeight = $derived(activeTab === 'bar' 
+		? Math.max(300, items.length * 35) 
+		: 300);
 
 	function fmtCcy(v: number) {
 		return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
@@ -49,8 +55,8 @@
 		const bgColors = items.map((_, idx) => color(idx));
 		const bgFaded  = items.map((_, idx) => color(idx, 0.75));
 
-		// Donut
-		if (donutCanvas) {
+		// Donut - only build if active tab is donut
+		if (activeTab === 'donut' && donutCanvas) {
 			donutChart?.destroy();
 			donutChart = new Chart(donutCanvas, {
 				type: 'doughnut',
@@ -83,9 +89,9 @@
 			}) as ChartType;
 		}
 
-		// Horizontal grouped bar — market value vs cost basis
-		const costs = items.map((i) => i.costBasis);
-		if (barCanvas) {
+		// Horizontal grouped bar — market value vs cost basis - only build if active tab is bar
+		if (activeTab === 'bar' && barCanvas) {
+			const costs = items.map((i) => i.costBasis);
 			barChart?.destroy();
 			barChart = new Chart(barCanvas, {
 				type: 'bar',
@@ -168,8 +174,9 @@
 		// track dependencies
 		const _ = items;
 		const tab = activeTab;
-		// small tick to let the canvas mount
-		Promise.resolve().then(buildCharts);
+		// Delay to let canvas mount and become visible
+		const timer = setTimeout(buildCharts, 10);
+		return () => clearTimeout(timer);
 	});
 
 	onDestroy(() => {
@@ -214,18 +221,18 @@
 			<div class="flex flex-col gap-6 lg:flex-row lg:items-start">
 
 				<!-- Chart area -->
-				<div class="relative flex-1" style="min-height:300px">
+				<div class="relative flex-1" style="height:{chartHeight}px">
 					<!-- Donut canvas -->
 					<canvas
 						bind:this={donutCanvas}
 						class="absolute inset-0 h-full w-full"
-						class:hidden={activeTab !== 'donut'}
+						style="display:{activeTab === 'donut' ? 'block' : 'none'}"
 					></canvas>
 					<!-- Bar canvas -->
 					<canvas
 						bind:this={barCanvas}
 						class="absolute inset-0 h-full w-full"
-						class:hidden={activeTab !== 'bar'}
+						style="display:{activeTab === 'bar' ? 'block' : 'none'}"
 					></canvas>
 
 					<!-- Donut centre label -->

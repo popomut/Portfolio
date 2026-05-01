@@ -1,12 +1,15 @@
 <script lang="ts">
-	import type { Transaction } from '$lib/utils/portfolio';
+	import type { Transaction, Dividend } from '$lib/utils/portfolio';
 	import { computePortfolioItem } from '$lib/utils/portfolio';
+	import AddDividendModal from '$lib/components/AddDividendModal.svelte';
 
 	let {
 		open,
 		ticker,
 		stockName,
 		currentPrice,
+		currentShares,
+		stockCurrency,
 		onclose,
 		onedit,
 		ondelete
@@ -15,26 +18,38 @@
 		ticker: string;
 		stockName: string;
 		currentPrice: number;
+		currentShares: number;
+		stockCurrency: string;
 		onclose: () => void;
 		onedit: (tx: Transaction) => void;
 		ondelete: (id: string) => Promise<void>;
 	} = $props();
 
 	let transactions = $state<Transaction[]>([]);
+	let dividends = $state<Dividend[]>([]);
 	let loading = $state(false);
 	let deleteConfirm = $state<string | null>(null);
+	let deleteDivConfirm = $state<string | null>(null);
+	let activeTab = $state<'transactions' | 'dividends'>('transactions');
+
+	let dividendModalOpen = $state(false);
+	let editDividend = $state<Dividend | null>(null);
 
 	$effect(() => {
 		if (open && ticker) {
-			fetchTransactions();
+			fetchAll();
 		}
 	});
 
-	async function fetchTransactions() {
+	async function fetchAll() {
 		loading = true;
 		try {
-			const res = await fetch(`/api/transactions?ticker=${encodeURIComponent(ticker)}`);
-			transactions = await res.json();
+			const [txRes, divRes] = await Promise.all([
+				fetch(`/api/transactions?ticker=${encodeURIComponent(ticker)}`),
+				fetch(`/api/dividends?ticker=${encodeURIComponent(ticker)}`)
+			]);
+			transactions = await txRes.json();
+			dividends = await divRes.json();
 		} finally {
 			loading = false;
 		}
@@ -44,8 +59,19 @@
 		await ondelete(id);
 		transactions = transactions.filter((t) => t.id !== id);
 		deleteConfirm = null;
-		if (transactions.length === 0) onclose();
-		else await fetchTransactions();
+		if (transactions.length === 0 && dividends.length === 0) onclose();
+		else await fetchAll();
+	}
+
+	async function handleDeleteDividend(id: string) {
+		await fetch(`/api/dividends/${id}`, { method: 'DELETE' });
+		dividends = dividends.filter((d) => d.id !== id);
+		deleteDivConfirm = null;
+	}
+
+	function openEditDividend(d: Dividend) {
+		editDividend = d;
+		dividendModalOpen = true;
 	}
 
 	function fmtCurrency(v: number) {
@@ -65,6 +91,8 @@
 		if (transactions.length === 0) return null;
 		return computePortfolioItem(ticker, stockName, currentPrice, transactions);
 	});
+
+	let totalDividends = $derived(dividends.reduce((s, d) => s + d.totalAmount, 0));
 
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') onclose();
@@ -96,26 +124,53 @@
 				</button>
 			</div>
 
+			<!-- Tab bar -->
+			<div class="flex border-b border-slate-200 px-6">
+				<button
+					onclick={() => activeTab = 'transactions'}
+					class="mr-1 border-b-2 px-4 py-3 text-sm font-medium transition-colors"
+					class:border-indigo-600={activeTab === 'transactions'}
+					class:text-indigo-600={activeTab === 'transactions'}
+					class:border-transparent={activeTab !== 'transactions'}
+					class:text-slate-500={activeTab !== 'transactions'}
+					class:hover:text-slate-700={activeTab !== 'transactions'}
+				>
+					Transactions ({transactions.length})
+				</button>
+				<button
+					onclick={() => activeTab = 'dividends'}
+					class="border-b-2 px-4 py-3 text-sm font-medium transition-colors"
+					class:border-emerald-600={activeTab === 'dividends'}
+					class:text-emerald-600={activeTab === 'dividends'}
+					class:border-transparent={activeTab !== 'dividends'}
+					class:text-slate-500={activeTab !== 'dividends'}
+					class:hover:text-slate-700={activeTab !== 'dividends'}
+				>
+					Dividends ({dividends.length})
+				</button>
+			</div>
+
 			<!-- Body -->
 			<div class="flex-1 overflow-auto">
 				{#if loading}
 					<div class="p-8 text-center text-slate-500">Loading…</div>
-				{:else if transactions.length === 0}
-					<div class="p-8 text-center text-slate-500">No transactions found.</div>
-				{:else}
-					<table class="min-w-full text-sm">
-						<thead class="sticky top-0 z-10">
-							<tr class="border-b border-slate-200 bg-slate-50 shadow-sm">
-								<th class="px-4 py-3 text-left font-semibold text-slate-600">Date</th>
-								<th class="px-4 py-3 text-left font-semibold text-slate-600">Type</th>
-								<th class="px-4 py-3 text-right font-semibold text-slate-600">Shares</th>
-								<th class="px-4 py-3 text-right font-semibold text-slate-600">Price</th>
-								<th class="px-4 py-3 text-right font-semibold text-slate-600">Fees</th>
-								<th class="px-4 py-3 text-right font-semibold text-slate-600">Total</th>
-								<th class="px-4 py-3 text-left font-semibold text-slate-600">Notes</th>
-								<th class="px-4 py-3 text-right font-semibold text-slate-600">Actions</th>
-							</tr>
-						</thead>
+				{:else if activeTab === 'transactions'}
+					{#if transactions.length === 0}
+						<div class="p-8 text-center text-slate-500">No transactions found.</div>
+					{:else}
+						<table class="min-w-full text-sm">
+							<thead class="sticky top-0 z-10">
+								<tr class="border-b border-slate-200 bg-slate-50 shadow-sm">
+									<th class="px-4 py-3 text-left font-semibold text-slate-600">Date</th>
+									<th class="px-4 py-3 text-left font-semibold text-slate-600">Type</th>
+									<th class="px-4 py-3 text-right font-semibold text-slate-600">Shares</th>
+									<th class="px-4 py-3 text-right font-semibold text-slate-600">Price</th>
+									<th class="px-4 py-3 text-right font-semibold text-slate-600">Fees</th>
+									<th class="px-4 py-3 text-right font-semibold text-slate-600">Total</th>
+									<th class="px-4 py-3 text-left font-semibold text-slate-600">Notes</th>
+									<th class="px-4 py-3 text-right font-semibold text-slate-600">Actions</th>
+								</tr>
+							</thead>
 							<tbody class="divide-y divide-slate-100">
 								{#each transactions as tx (tx.id)}
 									<tr class="hover:bg-slate-50">
@@ -170,7 +225,6 @@
 									</tr>
 								{/each}
 							</tbody>
-							<!-- Summary row -->
 							{#if summary}
 								{@const s = summary}
 								<tfoot>
@@ -191,8 +245,88 @@
 								</tfoot>
 							{/if}
 						</table>
+					{/if}
+				{:else}
+					<!-- Dividends tab -->
+					{#if dividends.length === 0}
+						<div class="p-8 text-center text-slate-500">No dividends recorded yet.</div>
+					{:else}
+						<table class="min-w-full text-sm">
+							<thead class="sticky top-0 z-10">
+								<tr class="border-b border-slate-200 bg-slate-50 shadow-sm">
+									<th class="px-4 py-3 text-left font-semibold text-slate-600">Ex-Date</th>
+									<th class="px-4 py-3 text-left font-semibold text-slate-600">Pay Date</th>
+									<th class="px-4 py-3 text-right font-semibold text-slate-600">Shares Held</th>
+									<th class="px-4 py-3 text-right font-semibold text-slate-600">Amt/Share</th>
+									<th class="px-4 py-3 text-right font-semibold text-slate-600">Withholding</th>
+									<th class="px-4 py-3 text-right font-semibold text-slate-600">Net Total</th>
+									<th class="px-4 py-3 text-left font-semibold text-slate-600">Currency</th>
+									<th class="px-4 py-3 text-left font-semibold text-slate-600">Notes</th>
+									<th class="px-4 py-3 text-right font-semibold text-slate-600">Actions</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-slate-100">
+								{#each dividends as d (d.id)}
+									<tr class="hover:bg-slate-50">
+										<td class="px-4 py-3 text-slate-700">{d.exDate}</td>
+										<td class="px-4 py-3 text-slate-700">{d.payDate}</td>
+										<td class="px-4 py-3 text-right text-slate-700">{d.sharesHeld.toFixed(4)}</td>
+										<td class="px-4 py-3 text-right text-slate-700">{d.amountPerShare.toFixed(4)}</td>
+										<td class="px-4 py-3 text-right text-slate-700">{d.withholdingTax > 0 ? fmtCurrency(d.withholdingTax) : '—'}</td>
+										<td class="px-4 py-3 text-right font-medium text-emerald-700">{fmtCurrency(d.totalAmount)}</td>
+										<td class="px-4 py-3 text-slate-500 text-xs">{d.currency}</td>
+										<td class="px-4 py-3 text-slate-500 text-xs max-w-24">
+											{#if d.notes}
+												<span class="block truncate">{d.notes}</span>
+											{:else}
+												<span class="text-slate-300">—</span>
+											{/if}
+										</td>
+										<td class="px-4 py-3 text-right">
+											<div class="flex items-center justify-end gap-2">
+												<button
+													onclick={() => openEditDividend(d)}
+													class="text-xs text-emerald-600 hover:underline"
+												>Edit</button>
+												{#if deleteDivConfirm === d.id}
+													<button onclick={() => handleDeleteDividend(d.id)} class="text-xs text-red-600 font-semibold hover:underline">Confirm</button>
+													<button onclick={() => (deleteDivConfirm = null)} class="text-xs text-slate-500 hover:underline">Cancel</button>
+												{:else}
+													<button onclick={() => (deleteDivConfirm = d.id)} class="text-xs text-red-600 hover:underline">Delete</button>
+												{/if}
+											</div>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+							<tfoot>
+								<tr class="border-t-2 border-slate-300 bg-emerald-50 font-semibold">
+									<td class="px-4 py-3 text-slate-700" colspan="5">Total Dividends Received</td>
+									<td class="px-4 py-3 text-right text-emerald-700">{fmtCurrency(totalDividends)}</td>
+									<td colspan="3"></td>
+								</tr>
+							</tfoot>
+						</table>
+					{/if}
 				{/if}
 			</div>
 		</div>
 	</div>
+
+	<!-- Edit Dividend Modal (z-60 to be above this modal) -->
+	{#if dividendModalOpen}
+		<AddDividendModal
+			open={dividendModalOpen}
+			{ticker}
+			currency={stockCurrency}
+			{currentShares}
+			{editDividend}
+			onclose={async (saved) => {
+				dividendModalOpen = false;
+				editDividend = null;
+				if (saved) await fetchAll();
+			}}
+		/>
+	{/if}
 {/if}
+

@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { transaction, stock } from '$lib/server/db/schema';
+import { eq, and } from 'drizzle-orm';
 
 export const POST: RequestHandler = async ({ request }) => {
   const rows: Array<{
@@ -19,8 +20,18 @@ export const POST: RequestHandler = async ({ request }) => {
     return json({ error: 'No data provided' }, { status: 400 });
   }
 
+  // Load existing transactions once for duplicate checking
+  const existing = await db.select().from(transaction);
+  const existingKeys = new Set(
+    existing.map(t => `${t.ticker}|${t.date}|${t.type}|${t.shares}|${t.pricePerShare}`)
+  );
+
   const inserted = [];
   for (const row of rows) {
+    const key = `${row.ticker.toUpperCase()}|${row.date}|${row.type}|${Number(row.shares)}|${Number(row.pricePerShare)}`;
+    if (existingKeys.has(key)) continue; // skip exact duplicate
+    existingKeys.add(key); // guard against duplicates within the same import batch
+
     const [tx] = await db.insert(transaction).values({
       ticker: row.ticker.toUpperCase(),
       type: row.type,
