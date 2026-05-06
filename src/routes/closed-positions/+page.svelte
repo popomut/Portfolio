@@ -27,12 +27,50 @@
 		<h1 class="text-3xl font-bold text-slate-900 mb-2">Closed Positions</h1>
 		<p class="text-slate-600 mb-6">Historical positions that have been fully exited</p>
 
-		{#if data.closedPositions.length === 0}
-			<div class="bg-white rounded-lg border border-slate-200 p-8 text-center">
-				<p class="text-slate-500">No closed positions yet</p>
+	{#if data.closedPositions.length === 0}
+		<div class="bg-white rounded-lg border border-slate-200 p-8 text-center">
+			<p class="text-slate-500">No closed positions yet</p>
+		</div>
+	{:else}
+		<!-- Summary Section -->
+		<div class="mb-8 grid grid-cols-1 md:grid-cols-4 gap-4">
+			<div class="bg-white rounded-lg border border-slate-200 p-6">
+				<p class="text-sm text-slate-600 font-medium mb-2">Total Closed Positions</p>
+				<p class="text-2xl font-bold text-slate-900">{data.closedPositions.length}</p>
 			</div>
-		{:else}
-			<div class="overflow-x-auto bg-white rounded-lg border border-slate-200 shadow-sm">
+			<div class="bg-white rounded-lg border border-slate-200 p-6">
+				<p class="text-sm text-slate-600 font-medium mb-2">Total Cost Basis</p>
+				<p class="text-2xl font-bold text-slate-900">
+					{formatCurrency(
+						data.closedPositions.reduce((sum, p) => sum + p.totalCostBasis, 0),
+						data.closedPositions[0]?.currency || 'USD'
+					)}
+				</p>
+			</div>
+			<div class="bg-white rounded-lg border border-slate-200 p-6">
+				<p class="text-sm text-slate-600 font-medium mb-2">Total Dividends</p>
+				<p class="text-2xl font-bold text-blue-700">
+					{formatCurrency(
+						data.closedPositions.reduce((sum, p) => sum + p.totalDividends, 0),
+						data.closedPositions[0]?.currency || 'USD'
+					)}
+				</p>
+			</div>
+			{#if data.closedPositions.length > 0}
+				{@const totalGains = data.closedPositions.reduce((sum, p) => sum + p.realizedGain, 0)}
+				<div class="bg-white rounded-lg border border-slate-200 p-6">
+					<p class="text-sm text-slate-600 font-medium mb-2">Total Realized Gains</p>
+					<p class="text-2xl font-bold {totalGains >= 0 ? 'text-green-700' : 'text-red-700'}">
+						{formatCurrency(
+							totalGains,
+							data.closedPositions[0]?.currency || 'USD'
+						)}
+					</p>
+				</div>
+			{/if}
+		</div>
+
+		<div class="overflow-x-auto bg-white rounded-lg border border-slate-200 shadow-sm">
 				<table class="w-full divide-y divide-slate-200">
 					<thead class="bg-slate-50">
 						<tr>
@@ -50,6 +88,9 @@
 							</th>
 							<th class="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">
 								Return %
+							</th>
+							<th class="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">
+								Return % (incl. Div)
 							</th>
 							<th class="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">
 								Exit Date
@@ -93,6 +134,15 @@
 										{formatPercent(position.realizedGainPct)}
 									</span>
 								</td>
+								<td class="px-6 py-4 whitespace-nowrap text-sm font-semibold">
+									<span
+										class={position.totalReturnPct >= 0
+											? 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700'
+											: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700'}
+									>
+										{formatPercent(position.totalReturnPct)}
+									</span>
+								</td>
 								<td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
 									{formatDate(position.exitDate)}
 								</td>
@@ -100,45 +150,7 @@
 						{/each}
 					</tbody>
 				</table>
-			</div>
-
-			<!-- Summary Section -->
-			<div class="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
-				<div class="bg-white rounded-lg border border-slate-200 p-6">
-					<p class="text-sm text-slate-600 font-medium mb-2">Total Closed Positions</p>
-					<p class="text-2xl font-bold text-slate-900">{data.closedPositions.length}</p>
-				</div>
-				<div class="bg-white rounded-lg border border-slate-200 p-6">
-					<p class="text-sm text-slate-600 font-medium mb-2">Total Cost Basis</p>
-					<p class="text-2xl font-bold text-slate-900">
-						{formatCurrency(
-							data.closedPositions.reduce((sum, p) => sum + p.totalCostBasis, 0),
-							data.closedPositions[0]?.currency || 'USD'
-						)}
-					</p>
-				</div>
-				<div class="bg-white rounded-lg border border-slate-200 p-6">
-					<p class="text-sm text-slate-600 font-medium mb-2">Total Dividends</p>
-					<p class="text-2xl font-bold text-blue-700">
-						{formatCurrency(
-							data.closedPositions.reduce((sum, p) => sum + p.totalDividends, 0),
-							data.closedPositions[0]?.currency || 'USD'
-						)}
-					</p>
-				</div>
-				{#if data.closedPositions.length > 0}
-					{@const totalGains = data.closedPositions.reduce((sum, p) => sum + p.realizedGain, 0)}
-					<div class="bg-white rounded-lg border border-slate-200 p-6">
-						<p class="text-sm text-slate-600 font-medium mb-2">Total Realized Gains</p>
-						<p class="text-2xl font-bold {totalGains >= 0 ? 'text-green-700' : 'text-red-700'}">
-							{formatCurrency(
-								totalGains,
-								data.closedPositions[0]?.currency || 'USD'
-							)}
-						</p>
-					</div>
-				{/if}
-			</div>
-		{/if}
+		</div>
+	{/if}
 	</div>
 </div>

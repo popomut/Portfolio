@@ -39,6 +39,7 @@ export type PortfolioItem = {
   transactions: Transaction[];
   dividends: Dividend[];
   totalDividends: number;
+  realizedPnl: number;
 };
 
 export type PortfolioSummary = {
@@ -48,6 +49,7 @@ export type PortfolioSummary = {
   totalPnl: number;
   totalPnlPct: number;
   totalDividends: number;
+  totalRealizedPnl: number;
 };
 
 // XIRR via Newton's method
@@ -95,6 +97,7 @@ export function computePortfolioItem(
 
   let totalShares = 0;
   let totalCost = 0;
+  let realizedPnl = 0;
   const cashflows: { date: Date; amount: number }[] = [];
 
   for (const tx of sorted) {
@@ -104,9 +107,11 @@ export function computePortfolioItem(
       cashflows.push({ date: new Date(tx.date), amount: -(tx.shares * tx.pricePerShare + tx.fees) });
     } else {
       const avgCost = totalShares > 0 ? totalCost / totalShares : 0;
+      const proceeds = tx.shares * tx.pricePerShare - tx.fees;
+      realizedPnl += proceeds - (avgCost * tx.shares);
       totalCost -= avgCost * tx.shares;
       totalShares -= tx.shares;
-      cashflows.push({ date: new Date(tx.date), amount: tx.shares * tx.pricePerShare - tx.fees });
+      cashflows.push({ date: new Date(tx.date), amount: proceeds });
     }
   }
 
@@ -141,7 +146,8 @@ export function computePortfolioItem(
     irr,
     transactions: sorted,
     dividends,
-    totalDividends
+    totalDividends,
+    realizedPnl
   };
 }
 
@@ -151,5 +157,6 @@ export function computePortfolioSummary(items: PortfolioItem[]): PortfolioSummar
   const totalPnl = totalMarketValue - totalCostBasis;
   const totalPnlPct = totalCostBasis > 0 ? (totalPnl / totalCostBasis) * 100 : 0;
   const totalDividends = items.reduce((s, i) => s + i.totalDividends, 0);
-  return { items, totalMarketValue, totalCostBasis, totalPnl, totalPnlPct, totalDividends };
+  const totalRealizedPnl = items.reduce((s, i) => s + i.realizedPnl, 0);
+  return { items, totalMarketValue, totalCostBasis, totalPnl, totalPnlPct, totalDividends, totalRealizedPnl };
 }

@@ -142,7 +142,7 @@ async function fetchCurrentPrices() {
 
 <div class="space-y-6">
 <!-- Summary bar -->
-<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-10">
 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Market Value</p>
 <p class="mt-1 text-xl font-bold text-slate-800">{fmtCurrency(data.summary.totalMarketValue)}</p>
@@ -152,18 +152,38 @@ async function fetchCurrentPrices() {
 <p class="mt-1 text-xl font-bold text-slate-800">{fmtCurrency(data.summary.totalCostBasis)}</p>
 </div>
 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-<p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Total P&amp;L</p>
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Positions</p>
+<p class="mt-1 text-xl font-bold text-slate-800">{data.summary.items.length}</p>
+</div>
+<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Unrealized Gains</p>
 <p class="mt-1 text-xl font-bold" class:text-green-600={data.summary.totalPnl >= 0} class:text-red-600={data.summary.totalPnl < 0}>
 {fmtCurrency(data.summary.totalPnl)} ({fmtPct(data.summary.totalPnlPct)})
 </p>
 </div>
-<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-<p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Positions</p>
-<p class="mt-1 text-xl font-bold text-slate-800">{data.summary.items.length}</p>
+<div class="rounded-xl border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-cyan-700 uppercase tracking-wide">Realized Gains/Loss from Open Positions</p>
+<p class="mt-1 text-xl font-bold" class:text-green-700={(data.summary.totalRealizedPnl ?? 0) >= 0} class:text-red-700={(data.summary.totalRealizedPnl ?? 0) < 0}>{fmtCurrency(data.summary.totalRealizedPnl ?? 0)}</p>
+</div>
+<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-amber-700 uppercase tracking-wide">Realized Gains/Loss from Closed Positions</p>
+<p class="mt-1 text-xl font-bold" class:text-green-700={(data.totalRealizedGains ?? 0) >= 0} class:text-red-700={(data.totalRealizedGains ?? 0) < 0}>{fmtCurrency(data.totalRealizedGains ?? 0)}</p>
+</div>
+<div class="rounded-xl border border-orange-200 bg-orange-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-orange-700 uppercase tracking-wide">Total Realized Gains</p>
+<p class="mt-1 text-xl font-bold" class:text-green-700={((data.summary.totalRealizedPnl ?? 0) + (data.totalRealizedGains ?? 0)) >= 0} class:text-red-700={((data.summary.totalRealizedPnl ?? 0) + (data.totalRealizedGains ?? 0)) < 0}>{fmtCurrency((data.summary.totalRealizedPnl ?? 0) + (data.totalRealizedGains ?? 0))}</p>
 </div>
 <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-<p class="text-xs font-medium text-emerald-700 uppercase tracking-wide">Total Dividends</p>
+<p class="text-xs font-medium text-emerald-700 uppercase tracking-wide">Open Dividends</p>
 <p class="mt-1 text-xl font-bold text-emerald-700">{fmtCurrency(data.summary.totalDividends)}</p>
+</div>
+<div class="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-blue-700 uppercase tracking-wide">Closed Dividends</p>
+<p class="mt-1 text-xl font-bold text-blue-700">{fmtCurrency(data.closedDividends ?? 0)}</p>
+</div>
+<div class="rounded-xl border border-violet-200 bg-violet-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-violet-700 uppercase tracking-wide">Total Dividends</p>
+<p class="mt-1 text-xl font-bold text-violet-700">{fmtCurrency(data.summary.totalDividends + (data.closedDividends ?? 0))}</p>
 </div>
 </div>
 
@@ -220,6 +240,7 @@ async function fetchCurrentPrices() {
 <th class="px-4 py-3 text-right font-semibold text-slate-600">Market Value</th>
 <th class="px-4 py-3 text-right font-semibold text-slate-600">P&amp;L $</th>
 <th class="px-4 py-3 text-right font-semibold text-slate-600">P&amp;L %</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600">Realized P/L</th>
 <th class="px-4 py-3 text-right font-semibold text-slate-600">IRR</th>
 <th class="px-4 py-3 text-right font-semibold text-slate-600">Dividends</th>
 <th class="px-4 py-3 text-right font-semibold text-slate-600">Actions</th>
@@ -261,6 +282,9 @@ onclick={() => openHistory(item)}
 </td>
 <td class="px-4 py-3 text-right font-medium" class:text-green-600={item.pnlPct >= 0} class:text-red-600={item.pnlPct < 0}>
 {fmtPct(item.pnlPct)}
+</td>
+<td class="px-4 py-3 text-right font-medium" class:text-green-600={item.realizedPnl >= 0} class:text-red-600={item.realizedPnl < 0}>
+{item.realizedPnl !== 0 ? fmtCurrency(item.realizedPnl) : '—'}
 </td>
 <td class="px-4 py-3 text-right text-slate-700">{fmtIrr(item.irr)}</td>
 <td class="px-4 py-3 text-right font-medium">

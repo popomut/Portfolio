@@ -55,6 +55,7 @@ await db.execute(`CREATE TABLE IF NOT EXISTS dividend (
 
 // Seed nav items
 await db.execute('DELETE FROM nav_item');
+const settingsId = randomUUID();
 await db.execute({
   sql: 'INSERT INTO nav_item (id, label, href, icon, parent_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
   args: [randomUUID(), 'Portfolio', '/', 'bar-chart-2', null, 0]
@@ -62,6 +63,22 @@ await db.execute({
 await db.execute({
   sql: 'INSERT INTO nav_item (id, label, href, icon, parent_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
   args: [randomUUID(), 'Import', '/import', 'upload', null, 1]
+});
+await db.execute({
+  sql: 'INSERT INTO nav_item (id, label, href, icon, parent_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+  args: [randomUUID(), 'Imported Data', '/imported-data', 'folder', null, 2]
+});
+await db.execute({
+  sql: 'INSERT INTO nav_item (id, label, href, icon, parent_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+  args: [randomUUID(), 'Closed Positions', '/closed-positions', 'circle', null, 3]
+});
+await db.execute({
+  sql: 'INSERT INTO nav_item (id, label, href, icon, parent_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+  args: [settingsId, 'Settings', '/settings', 'settings', null, 4]
+});
+await db.execute({
+  sql: 'INSERT INTO nav_item (id, label, href, icon, parent_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+  args: [randomUUID(), 'Dividends', '/dividends', 'bar-chart-2', null, 5]
 });
 
 // Clear existing data

@@ -11,6 +11,7 @@ export type ClosedPosition = {
   totalDividends: number;
   realizedGain: number;
   realizedGainPct: number;
+  totalReturnPct: number;
   exitDate: string;
   currency: string;
   transactions: any[];
@@ -53,6 +54,7 @@ export const load: PageServerLoad = async () => {
       const realizedGain = totalProceeds - totalBuyCost;
       const realizedGainPct = totalBuyCost > 0 ? (realizedGain / totalBuyCost) * 100 : 0;
 
+      const totalReturnPct = totalBuyCost > 0 ? ((realizedGain + item.totalDividends) / totalBuyCost) * 100 : 0;
       closedPositions.push({
         ticker: s.ticker,
         name: s.name,
@@ -60,6 +62,7 @@ export const load: PageServerLoad = async () => {
         totalDividends: item.totalDividends,
         realizedGain,
         realizedGainPct,
+        totalReturnPct,
         exitDate,
         currency: s.currency,
         transactions: item.transactions
