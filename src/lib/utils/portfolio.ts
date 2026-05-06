@@ -39,6 +39,8 @@ export type PortfolioItem = {
   transactions: Transaction[];
   dividends: Dividend[];
   totalDividends: number;
+  annualDividend: number;
+  yieldOnCost: number | null;
   realizedPnl: number;
 };
 
@@ -50,6 +52,8 @@ export type PortfolioSummary = {
   totalPnlPct: number;
   totalDividends: number;
   totalRealizedPnl: number;
+  totalAnnualDividend: number;
+  portfolioYieldOnCost: number | null;
 };
 
 // XIRR via Newton's method
@@ -132,6 +136,12 @@ export function computePortfolioItem(
   const irr = xirr(cashflows);
   const totalDividends = dividends.reduce((s, d) => s + d.totalAmount, 0);
 
+  const now = new Date();
+  const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+  const recentDividends = dividends.filter(d => new Date(d.payDate) >= twelveMonthsAgo);
+  const annualDividend = recentDividends.reduce((s, d) => s + d.totalAmount, 0);
+  const yieldOnCost = costBasis > 0 && annualDividend > 0 ? (annualDividend / costBasis) * 100 : null;
+
   return {
     ticker,
     name,
@@ -147,6 +157,8 @@ export function computePortfolioItem(
     transactions: sorted,
     dividends,
     totalDividends,
+    annualDividend,
+    yieldOnCost,
     realizedPnl
   };
 }
@@ -158,5 +170,7 @@ export function computePortfolioSummary(items: PortfolioItem[]): PortfolioSummar
   const totalPnlPct = totalCostBasis > 0 ? (totalPnl / totalCostBasis) * 100 : 0;
   const totalDividends = items.reduce((s, i) => s + i.totalDividends, 0);
   const totalRealizedPnl = items.reduce((s, i) => s + i.realizedPnl, 0);
-  return { items, totalMarketValue, totalCostBasis, totalPnl, totalPnlPct, totalDividends, totalRealizedPnl };
+  const totalAnnualDividend = items.reduce((s, i) => s + i.annualDividend, 0);
+  const portfolioYieldOnCost = totalCostBasis > 0 && totalAnnualDividend > 0 ? (totalAnnualDividend / totalCostBasis) * 100 : null;
+  return { items, totalMarketValue, totalCostBasis, totalPnl, totalPnlPct, totalDividends, totalRealizedPnl, totalAnnualDividend, portfolioYieldOnCost };
 }

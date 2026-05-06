@@ -142,7 +142,7 @@ async function fetchCurrentPrices() {
 
 <div class="space-y-6">
 <!-- Summary bar -->
-<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-10">
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-12">
 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Market Value</p>
 <p class="mt-1 text-xl font-bold text-slate-800">{fmtCurrency(data.summary.totalMarketValue)}</p>
@@ -184,6 +184,14 @@ async function fetchCurrentPrices() {
 <div class="rounded-xl border border-violet-200 bg-violet-50 p-4 shadow-sm">
 <p class="text-xs font-medium text-violet-700 uppercase tracking-wide">Total Dividends</p>
 <p class="mt-1 text-xl font-bold text-violet-700">{fmtCurrency(data.summary.totalDividends + (data.closedDividends ?? 0))}</p>
+</div>
+<div class="rounded-xl border border-teal-200 bg-teal-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-teal-700 uppercase tracking-wide">Annual Dividend</p>
+<p class="mt-1 text-xl font-bold text-teal-700">{fmtCurrency(data.summary.totalAnnualDividend)}</p>
+</div>
+<div class="rounded-xl border border-violet-200 bg-violet-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-violet-700 uppercase tracking-wide">Portfolio Yield on Cost</p>
+<p class="mt-1 text-xl font-bold text-violet-700">{data.summary.portfolioYieldOnCost !== null ? data.summary.portfolioYieldOnCost.toFixed(2) + '%' : '—'}</p>
 </div>
 </div>
 
@@ -243,6 +251,7 @@ async function fetchCurrentPrices() {
 <th class="px-4 py-3 text-right font-semibold text-slate-600">Realized P/L</th>
 <th class="px-4 py-3 text-right font-semibold text-slate-600">IRR</th>
 <th class="px-4 py-3 text-right font-semibold text-slate-600">Dividends</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600">YoC</th>
 <th class="px-4 py-3 text-right font-semibold text-slate-600">Actions</th>
 </tr>
 </thead>
@@ -290,6 +299,13 @@ onclick={() => openHistory(item)}
 <td class="px-4 py-3 text-right font-medium">
 {#if item.totalDividends > 0}
 <span class="text-emerald-600">{fmtCurrency(item.totalDividends)}</span>
+{:else}
+<span class="text-slate-300">—</span>
+{/if}
+</td>
+<td class="px-4 py-3 text-right font-medium">
+{#if item.yieldOnCost !== null}
+<span class="text-violet-600">{item.yieldOnCost.toFixed(2)}%</span>
 {:else}
 <span class="text-slate-300">—</span>
 {/if}
