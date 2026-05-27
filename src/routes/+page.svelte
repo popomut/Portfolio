@@ -22,6 +22,10 @@ let fetchingPrices = $state(false);
 let stalePrices = $state<Set<string>>(new Set());
 let fetchingTicker = $state<string | null>(null);
 
+// Sorting
+let sortColumn = $state<string>('ticker');
+let sortAsc = $state(true);
+
 function openAdd() {
 	editTransaction = null;
 	showAddModal = true;
@@ -138,11 +142,40 @@ async function fetchCurrentPrices() {
 		fetchingTicker = null;
 	}
 }
+
+function toggleSort(col: string) {
+	if (sortColumn === col) {
+		sortAsc = !sortAsc;
+	} else {
+		sortColumn = col;
+		sortAsc = true;
+	}
+}
+
+function getSortedItems() {
+	const items = [...data.summary.items];
+	items.sort((a, b) => {
+		let aVal: any = (a as any)[sortColumn];
+		let bVal: any = (b as any)[sortColumn];
+		
+		if (typeof aVal === 'number' && typeof bVal === 'number') {
+			return sortAsc ? aVal - bVal : bVal - aVal;
+		}
+		
+		if (typeof aVal === 'string' && typeof bVal === 'string') {
+			return sortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+		}
+		
+		return 0;
+	});
+	return items;
+}
 </script>
 
 <div class="space-y-6">
 <!-- Summary bar -->
-<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-12">
+<div class="space-y-3">
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Market Value</p>
 <p class="mt-1 text-xl font-bold text-slate-800">{fmtCurrency(data.summary.totalMarketValue)}</p>
@@ -169,6 +202,8 @@ async function fetchCurrentPrices() {
 <p class="text-xs font-medium text-amber-700 uppercase tracking-wide">Realized Gains/Loss from Closed Positions</p>
 <p class="mt-1 text-xl font-bold" class:text-green-700={(data.totalRealizedGains ?? 0) >= 0} class:text-red-700={(data.totalRealizedGains ?? 0) < 0}>{fmtCurrency(data.totalRealizedGains ?? 0)}</p>
 </div>
+</div>
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
 <div class="rounded-xl border border-orange-200 bg-orange-50 p-4 shadow-sm">
 <p class="text-xs font-medium text-orange-700 uppercase tracking-wide">Total Realized Gains</p>
 <p class="mt-1 text-xl font-bold" class:text-green-700={((data.summary.totalRealizedPnl ?? 0) + (data.totalRealizedGains ?? 0)) >= 0} class:text-red-700={((data.summary.totalRealizedPnl ?? 0) + (data.totalRealizedGains ?? 0)) < 0}>{fmtCurrency((data.summary.totalRealizedPnl ?? 0) + (data.totalRealizedGains ?? 0))}</p>
@@ -185,6 +220,8 @@ async function fetchCurrentPrices() {
 <p class="text-xs font-medium text-violet-700 uppercase tracking-wide">Total Dividends</p>
 <p class="mt-1 text-xl font-bold text-violet-700">{fmtCurrency(data.summary.totalDividends + (data.closedDividends ?? 0))}</p>
 </div>
+</div>
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
 <div class="rounded-xl border border-teal-200 bg-teal-50 p-4 shadow-sm">
 <p class="text-xs font-medium text-teal-700 uppercase tracking-wide">Annual Dividend</p>
 <p class="mt-1 text-xl font-bold text-teal-700">{fmtCurrency(data.summary.totalAnnualDividend)}</p>
@@ -192,6 +229,11 @@ async function fetchCurrentPrices() {
 <div class="rounded-xl border border-violet-200 bg-violet-50 p-4 shadow-sm">
 <p class="text-xs font-medium text-violet-700 uppercase tracking-wide">Portfolio Yield on Cost</p>
 <p class="mt-1 text-xl font-bold text-violet-700">{data.summary.portfolioYieldOnCost !== null ? data.summary.portfolioYieldOnCost.toFixed(2) + '%' : '—'}</p>
+</div>
+<div class="rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-rose-700 uppercase tracking-wide">Portfolio IRR</p>
+<p class="mt-1 text-xl font-bold" class:text-green-700={(data.portfolioIRR ?? 0) >= 0} class:text-red-700={(data.portfolioIRR ?? 0) < 0}>{fmtIrr(data.portfolioIRR)}</p>
+</div>
 </div>
 </div>
 
@@ -241,22 +283,44 @@ async function fetchCurrentPrices() {
 <table class="min-w-full text-sm">
 <thead>
 <tr class="border-b border-slate-200 bg-slate-50">
-<th class="px-4 py-3 text-left font-semibold text-slate-600">Ticker</th>
-<th class="px-4 py-3 text-right font-semibold text-slate-600">Shares</th>
-<th class="px-4 py-3 text-right font-semibold text-slate-600">Avg Cost</th>
-<th class="px-4 py-3 text-right font-semibold text-slate-600">Current Price</th>
-<th class="px-4 py-3 text-right font-semibold text-slate-600">Market Value</th>
-<th class="px-4 py-3 text-right font-semibold text-slate-600">P&amp;L $</th>
-<th class="px-4 py-3 text-right font-semibold text-slate-600">P&amp;L %</th>
-<th class="px-4 py-3 text-right font-semibold text-slate-600">Realized P/L</th>
-<th class="px-4 py-3 text-right font-semibold text-slate-600">IRR</th>
-<th class="px-4 py-3 text-right font-semibold text-slate-600">Dividends</th>
-<th class="px-4 py-3 text-right font-semibold text-slate-600">YoC</th>
+<th class="px-4 py-3 text-left font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('ticker')}>
+	Ticker {sortColumn === 'ticker' ? (sortAsc ? '↑' : '↓') : ''}
+</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('shares')}>
+	Shares {sortColumn === 'shares' ? (sortAsc ? '↑' : '↓') : ''}
+</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('avgCost')}>
+	Avg Cost {sortColumn === 'avgCost' ? (sortAsc ? '↑' : '↓') : ''}
+</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('currentPrice')}>
+	Current Price {sortColumn === 'currentPrice' ? (sortAsc ? '↑' : '↓') : ''}
+</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('marketValue')}>
+	Market Value {sortColumn === 'marketValue' ? (sortAsc ? '↑' : '↓') : ''}
+</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('pnl')}>
+	P&amp;L $ {sortColumn === 'pnl' ? (sortAsc ? '↑' : '↓') : ''}
+</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('pnlPct')}>
+	P&amp;L % {sortColumn === 'pnlPct' ? (sortAsc ? '↑' : '↓') : ''}
+</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('realizedPnl')}>
+	Realized P/L {sortColumn === 'realizedPnl' ? (sortAsc ? '↑' : '↓') : ''}
+</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('irr')}>
+	IRR {sortColumn === 'irr' ? (sortAsc ? '↑' : '↓') : ''}
+</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('totalDividends')}>
+	Dividends {sortColumn === 'totalDividends' ? (sortAsc ? '↑' : '↓') : ''}
+</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('yieldOnCost')}>
+	YoC {sortColumn === 'yieldOnCost' ? (sortAsc ? '↑' : '↓') : ''}
+</th>
 <th class="px-4 py-3 text-right font-semibold text-slate-600">Actions</th>
 </tr>
 </thead>
 <tbody class="divide-y divide-slate-100">
-{#each data.summary.items as item (item.ticker)}
+{#each getSortedItems() as item (item.ticker)}
 <tr
 class="cursor-pointer hover:bg-slate-50 transition-colors"
 onclick={() => openHistory(item)}

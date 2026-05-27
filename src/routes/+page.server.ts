@@ -2,7 +2,7 @@ import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { stock, transaction, dividend } from '$lib/server/db/schema';
 import { asc } from 'drizzle-orm';
-import { computePortfolioItem, computePortfolioSummary } from '$lib/utils/portfolio';
+import { computePortfolioItem, computePortfolioSummary, computePortfolioIRR } from '$lib/utils/portfolio';
 
 export const load: PageServerLoad = async () => {
   const stocks = await db.select().from(stock);
@@ -49,11 +49,13 @@ export const load: PageServerLoad = async () => {
   }
 
   const summary = computePortfolioSummary(items);
+  const portfolioIRR = computePortfolioIRR(transactions, dividends, items);
 
   return { 
     summary, 
     closedDividends: Number(closedDividends || 0),
     totalRealizedGains: Number(totalRealizedGains || 0),
-    totalPortfolioCost: Number(totalPortfolioCost || 0)
+    totalPortfolioCost: Number(totalPortfolioCost || 0),
+    portfolioIRR
   };
 };

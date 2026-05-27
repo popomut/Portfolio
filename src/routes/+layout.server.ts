@@ -44,6 +44,25 @@ export const load: LayoutServerLoad = async () => {
 		});
 	}
 
+	// Ensure Asset Allocation nav item exists
+	const hasAssetAllocation = items.some(i => i.href === '/asset-allocation');
+	if (!hasAssetAllocation) {
+		await db.insert(navItem).values({
+			label: 'Asset Allocation',
+			href: '/asset-allocation',
+			icon: 'globe',
+			sortOrder: 6
+		});
+		items.push({
+			id: 'generated-asset-allocation',
+			label: 'Asset Allocation',
+			href: '/asset-allocation',
+			icon: 'globe',
+			parentId: null,
+			sortOrder: 6
+		});
+	}
+
 	// Build tree: top-level items with their children
 	const roots = items.filter((i) => i.parentId === null);
 	const tree = roots.map((root) => ({

@@ -163,6 +163,36 @@ export function computePortfolioItem(
   };
 }
 
+export function computePortfolioIRR(
+  allTransactions: Transaction[],
+  allDividends: Dividend[],
+  openItems: { marketValue: number; shares: number }[]
+): number | null {
+  const cashflows: { date: Date; amount: number }[] = [];
+
+  for (const tx of allTransactions) {
+    if (tx.type === 'buy') {
+      cashflows.push({ date: new Date(tx.date), amount: -(tx.shares * tx.pricePerShare + tx.fees) });
+    } else {
+      cashflows.push({ date: new Date(tx.date), amount: tx.shares * tx.pricePerShare - tx.fees });
+    }
+  }
+
+  for (const d of allDividends) {
+    cashflows.push({ date: new Date(d.payDate), amount: d.totalAmount });
+  }
+
+  const totalMarketValue = openItems
+    .filter(item => item.shares > 0.0001)
+    .reduce((s, item) => s + item.marketValue, 0);
+
+  if (totalMarketValue > 0) {
+    cashflows.push({ date: new Date(), amount: totalMarketValue });
+  }
+
+  return xirr(cashflows);
+}
+
 export function computePortfolioSummary(items: PortfolioItem[]): PortfolioSummary {
   const totalMarketValue = items.reduce((s, i) => s + i.marketValue, 0);
   const totalCostBasis = items.reduce((s, i) => s + i.costBasis, 0);

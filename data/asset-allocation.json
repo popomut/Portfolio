@@ -1,0 +1,192 @@
+{
+  "areas": [
+    {
+      "id": 1,
+      "name": "เสี่ยงต่ำ คล่องสูง",
+      "cards": [
+        {
+          "id": 13,
+          "name": "scbfp",
+          "money": 1375411,
+          "color": "#90EE90"
+        },
+        {
+          "id": 23,
+          "name": "scb saving (1.5%)",
+          "money": 572413,
+          "color": "#FFE5B4"
+        },
+        {
+          "id": 24,
+          "name": "scb ออมทรัพย์",
+          "money": 385816,
+          "color": "#FFE5B4"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "เสี่ยงสูง คล่องสูง",
+      "cards": [
+        {
+          "id": 7,
+          "name": "stock + scbs + finansia",
+          "money": 5527629,
+          "color": "#87CEEB"
+        },
+        {
+          "id": 10,
+          "name": "scbdv",
+          "money": 743419,
+          "color": "#87CEEB"
+        },
+        {
+          "id": 11,
+          "name": "k-gpinuh-a(r)",
+          "money": 334764,
+          "color": "#87CEEB"
+        },
+        {
+          "id": 12,
+          "name": "digital assets (InnovestX, Binance, Wallet)",
+          "money": 80000,
+          "color": "#87CEEB"
+        },
+        {
+          "id": 16,
+          "name": "muspin-h-ar",
+          "money": 291020,
+          "color": "#87CEEB"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "เสี่ยงสูง คล่องต่ำ",
+      "cards": [
+        {
+          "id": 4,
+          "name": "SCBTP(ThaiESG)",
+          "money": 230166,
+          "color": "#FFD700"
+        },
+        {
+          "id": 5,
+          "name": "scbrmcha",
+          "money": 135174,
+          "color": "#FFB6C1"
+        },
+        {
+          "id": 6,
+          "name": "scbashares(ssf)",
+          "money": 257915,
+          "color": "#FFB6C1"
+        },
+        {
+          "id": 8,
+          "name": "SCBCHA-SSF",
+          "money": 430829,
+          "color": "#FFB6C1"
+        },
+        {
+          "id": 9,
+          "name": "kfltfdiv => KFAEQ-THAIESGX-L",
+          "money": 165318,
+          "color": "#FFD700"
+        },
+        {
+          "id": 19,
+          "name": "scbt70x(25d) (thai esgx)",
+          "money": 72831,
+          "color": "#FFD700"
+        },
+        {
+          "id": 20,
+          "name": "provident fund (high risk)(scbworld, scbgold)",
+          "money": 1250000,
+          "color": "#FFB6C1"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "เสี่ยงต่ำ คล่องต่ำ",
+      "cards": [
+        {
+          "id": 1,
+          "name": "ประกัน เมืองไทย 2016 (10/6) (ครบกำหนด 14-Dec-2026)",
+          "money": 600000,
+          "color": "#DDA0DD"
+        },
+        {
+          "id": 2,
+          "name": "ประกัน เมืองไทย 2022 (10/4)",
+          "money": 400000,
+          "color": "#DDA0DD"
+        },
+        {
+          "id": 3,
+          "name": "หุ้นกู้ TUC & SCB & TRUE",
+          "money": 500000,
+          "color": "#DDA0DD"
+        },
+        {
+          "id": 14,
+          "name": "SCBRM1",
+          "money": 142144,
+          "color": "#DDA0DD"
+        },
+        {
+          "id": 15,
+          "name": "SCBRM2",
+          "money": 198971,
+          "color": "#DDA0DD"
+        },
+        {
+          "id": 17,
+          "name": "scbsffplus-ssf",
+          "money": 294255,
+          "color": "#DDA0DD"
+        },
+        {
+          "id": 18,
+          "name": "SCBTB(ThaiESGA)",
+          "money": 497728,
+          "color": "#DDA0DD"
+        },
+        {
+          "id": 21,
+          "name": "provident fund (low risk)(pvdmpffi)",
+          "money": 3798705,
+          "color": "#DDA0DD"
+        },
+        {
+          "id": 22,
+          "name": "scbfp-ssf",
+          "money": 150721,
+          "color": "#DDA0DD"
+        }
+      ]
+    }
+  ],
+  "nextIdArea": 5,
+  "nextIdCard": 26,
+  "legend": [
+    {
+      "id": 1,
+      "color": "#90EE90",
+      "label": "buy house"
+    },
+    {
+      "id": 2,
+      "color": "#FFB6C1",
+      "label": "หุ้นจีน"
+    },
+    {
+      "id": 3,
+      "color": "#FFD700",
+      "label": "หุ้นไทย"
+    }
+  ],
+  "nextIdLegend": 5
+}

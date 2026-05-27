@@ -31,12 +31,14 @@
 	let barChart:   ChartType | null = null;
 
 	const totalValue = $derived(items.reduce((s, i) => s + i.marketValue, 0));
+	const sortedItems = $derived([...items].sort((a, b) => b.marketValue - a.marketValue));
+	const sortedIndices = $derived(sortedItems.map(item => items.indexOf(item)));
 	
 	// Dynamic chart height based on number of items
 	// Bar chart needs ~35px per row, donut needs minimum 300px
 	const chartHeight = $derived(activeTab === 'bar' 
-		? Math.max(300, items.length * 35) 
-		: 300);
+		? Math.max(250, items.length * 35) 
+		: 250);
 
 	function fmtCcy(v: number) {
 		return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
@@ -187,7 +189,7 @@
 
 <div class="rounded-xl border border-slate-200 bg-white shadow-sm">
 	<!-- Card header -->
-	<div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+	<div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
 		<h2 class="text-base font-semibold text-slate-800">Portfolio Allocation</h2>
 		<!-- Tab toggle -->
 		<div class="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-medium">
@@ -214,11 +216,11 @@
 		</div>
 	</div>
 
-	<div class="p-5">
+	<div class="p-3">
 		{#if items.length === 0}
 			<p class="py-8 text-center text-sm text-slate-400">No holdings to chart.</p>
 		{:else}
-			<div class="flex flex-col gap-6 lg:flex-row lg:items-start">
+			<div class="flex flex-col gap-4 lg:flex-row lg:items-start">
 
 				<!-- Chart area -->
 				<div class="relative flex-1" style="height:{chartHeight}px">
@@ -238,53 +240,54 @@
 					<!-- Donut centre label -->
 					{#if activeTab === 'donut'}
 						<div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-							<p class="text-xs text-slate-400">Total</p>
-							<p class="text-lg font-bold text-slate-800">{fmtCcy(totalValue)}</p>
+							<p class="text-[10px] text-slate-400">Total</p>
+							<p class="text-base font-bold text-slate-800">{fmtCcy(totalValue)}</p>
 						</div>
 					{/if}
 				</div>
 
 				<!-- Legend / table -->
-				<div class="w-full lg:w-72">
+				<div class="w-full lg:w-64 max-h-[250px] overflow-y-auto pr-1" style="scrollbar-width:thin;">
 					<table class="w-full text-sm">
 						<thead>
 							<tr class="border-b border-slate-100">
-								<th class="pb-2 text-left text-xs font-semibold text-slate-400">Stock</th>
-								<th class="pb-2 text-right text-xs font-semibold text-slate-400">Mkt Value</th>
+								<th class="pb-1 text-left text-xs font-semibold text-slate-400">Stock</th>
+								<th class="pb-1 text-right text-xs font-semibold text-slate-400">Mkt Value</th>
 								{#if activeTab === 'bar'}
-									<th class="pb-2 text-right text-xs font-semibold text-slate-400">Cost</th>
-									<th class="pb-2 text-right text-xs font-semibold text-slate-400">P&amp;L</th>
+									<th class="pb-1 text-right text-xs font-semibold text-slate-400">Cost</th>
+									<th class="pb-1 text-right text-xs font-semibold text-slate-400">P&amp;L</th>
 								{:else}
-									<th class="pb-2 text-right text-xs font-semibold text-slate-400">%</th>
+									<th class="pb-1 text-right text-xs font-semibold text-slate-400">%</th>
 								{/if}
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-slate-50">
-							{#each items as item, idx}
+							{#each sortedItems as item}
+								{@const idx = items.indexOf(item)}
 								{@const pct = totalValue > 0 ? (item.marketValue / totalValue) * 100 : 0}
 								{@const pnl = item.marketValue - item.costBasis}
 								<tr class="group">
-									<td class="py-1.5">
+									<td class="py-1">
 										<div class="flex items-center gap-2">
 											<span class="h-2.5 w-2.5 flex-shrink-0 rounded-full" style="background:{PALETTE[idx % PALETTE.length]}"></span>
 											<span class="font-semibold text-slate-700">{item.ticker}</span>
 										</div>
 									</td>
-									<td class="py-1.5 text-right text-slate-600">{fmtCcy(item.marketValue)}</td>
+									<td class="py-1 text-right text-slate-600">{fmtCcy(item.marketValue)}</td>
 									{#if activeTab === 'bar'}
-										<td class="py-1.5 text-right text-slate-500">{fmtCcy(item.costBasis)}</td>
-										<td class="py-1.5 text-right font-semibold" class:text-green-600={pnl >= 0} class:text-red-600={pnl < 0}>
+										<td class="py-1 text-right text-slate-500">{fmtCcy(item.costBasis)}</td>
+										<td class="py-1 text-right font-semibold" class:text-green-600={pnl >= 0} class:text-red-600={pnl < 0}>
 											{pnl >= 0 ? '+' : ''}{fmtCcy(pnl)}
 										</td>
 									{:else}
-										<td class="py-1.5 text-right">
-											<div class="flex items-center justify-end gap-1.5">
-												<div class="h-1.5 w-12 overflow-hidden rounded-full bg-slate-100">
-													<div class="h-full rounded-full" style="width:{pct}%;background:{PALETTE[idx % PALETTE.length]}"></div>
-												</div>
-												<span class="w-10 text-right text-xs text-slate-500">{pct.toFixed(1)}%</span>
+									<td class="py-1 text-right">
+										<div class="flex items-center justify-end gap-1.5">
+											<div class="h-1.5 w-12 overflow-hidden rounded-full bg-slate-100">
+												<div class="h-full rounded-full" style="width:{pct}%;background:{PALETTE[idx % PALETTE.length]}"></div>
 											</div>
-										</td>
+											<span class="w-10 text-right text-xs text-slate-500">{pct.toFixed(1)}%</span>
+										</div>
+									</td>
 									{/if}
 								</tr>
 							{/each}
