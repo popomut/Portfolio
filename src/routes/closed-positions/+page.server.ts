@@ -12,6 +12,7 @@ export type ClosedPosition = {
   realizedGain: number;
   realizedGainPct: number;
   totalReturnPct: number;
+  irr: number | null;
   exitDate: string;
   currency: string;
   transactions: any[];
@@ -63,6 +64,7 @@ export const load: PageServerLoad = async () => {
         realizedGain,
         realizedGainPct,
         totalReturnPct,
+        irr: item.irr,
         exitDate,
         currency: s.currency,
         transactions: item.transactions

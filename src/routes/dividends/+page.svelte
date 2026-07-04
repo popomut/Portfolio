@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import { onMount, onDestroy } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import type { Chart } from 'chart.js';
 
 	let { data }: { data: PageData } = $props();
@@ -320,6 +321,12 @@
 		yearlyByStockChart?.destroy();
 		monthlyChart?.destroy();
 	});
+
+	async function deleteDividend(id: string, ticker: string) {
+		if (!confirm(`Delete the dividend record for ${ticker}? This cannot be undone.`)) return;
+		await fetch(`/api/dividends/${id}`, { method: 'DELETE' });
+		await invalidateAll();
+	}
 </script>
 
 <div class="max-w-6xl mx-auto space-y-6">
@@ -487,6 +494,7 @@
 							<th class="px-4 py-3 text-right font-semibold text-slate-600">Amount/Share</th>
 							<th class="px-4 py-3 text-right font-semibold text-slate-600">Total</th>
 							<th class="px-4 py-3 text-right font-semibold text-slate-600">Tax</th>
+							<th class="px-4 py-3 text-center font-semibold text-slate-600">Actions</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-slate-100">
@@ -499,6 +507,17 @@
 								<td class="px-4 py-3 text-right text-slate-600">{fmtCurrency(d.amountPerShare)}</td>
 								<td class="px-4 py-3 text-right font-medium text-emerald-600">{fmtCurrency(d.totalAmount)}</td>
 								<td class="px-4 py-3 text-right text-slate-500">{fmtCurrency(d.withholdingTax)}</td>
+								<td class="px-4 py-3 text-center">
+									<button
+										onclick={() => deleteDividend(d.id, d.ticker)}
+										class="inline-flex items-center justify-center rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+										title="Delete dividend"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+											<path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+										</svg>
+									</button>
+								</td>
 							</tr>
 						{/each}
 					</tbody>

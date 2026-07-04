@@ -20,6 +20,11 @@
 		const [year, month, day] = dateStr.split('-');
 		return `${day}/${month}/${year}`;
 	}
+
+	function fmtIrr(v: number | null): string {
+		if (v === null) return '—';
+		return (v * 100).toFixed(1) + '%';
+	}
 </script>
 
 <div class="min-h-screen bg-slate-50 p-6">
@@ -93,6 +98,9 @@
 								Return % (incl. Div)
 							</th>
 							<th class="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">
+								IRR (annualised)
+							</th>
+							<th class="px-6 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">
 								Exit Date
 							</th>
 						</tr>
@@ -142,6 +150,19 @@
 									>
 										{formatPercent(position.totalReturnPct)}
 									</span>
+								</td>
+								<td class="px-6 py-4 whitespace-nowrap text-sm font-semibold">
+									{#if position.irr !== null}
+										<span
+											class={position.irr >= 0
+												? 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800'
+												: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800'}
+										>
+											{fmtIrr(position.irr)}
+										</span>
+									{:else}
+										<span class="text-slate-400">—</span>
+									{/if}
 								</td>
 								<td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
 									{formatDate(position.exitDate)}
