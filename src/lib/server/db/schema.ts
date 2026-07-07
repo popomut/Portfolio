@@ -48,3 +48,39 @@ export const dividend = sqliteTable('dividend', {
 	notes: text('notes').default(''),
 	createdAt: text('created_at').$defaultFn(() => new Date().toISOString())
 });
+
+// ─── SETMAI Fund (isolated tables, mirror shape of the main portfolio) ───
+
+export const setmaiStock = sqliteTable('setmai_stock', {
+	ticker: text('ticker').primaryKey(),
+	name: text('name').notNull().default(''),
+	currentPrice: real('current_price').notNull().default(0),
+	currency: text('currency').notNull().default('THB'),
+	updatedAt: text('updated_at')
+});
+
+export const setmaiTransaction = sqliteTable('setmai_transaction', {
+	id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+	ticker: text('ticker').notNull(),
+	type: text('type').notNull(),
+	date: text('date').notNull(),
+	shares: real('shares').notNull(),
+	pricePerShare: real('price_per_share').notNull(),
+	fees: real('fees').notNull().default(0),
+	notes: text('notes').default(''),
+	createdAt: text('created_at').$defaultFn(() => new Date().toISOString())
+});
+
+export const setmaiDividend = sqliteTable('setmai_dividend', {
+	id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+	ticker: text('ticker').notNull(),
+	exDate: text('ex_date').notNull(),
+	payDate: text('pay_date').notNull(),
+	sharesHeld: real('shares_held').notNull(),
+	amountPerShare: real('amount_per_share').notNull(),
+	totalAmount: real('total_amount').notNull(),
+	withholdingTax: real('withholding_tax').notNull().default(0),
+	currency: text('currency').notNull().default('THB'),
+	notes: text('notes').default(''),
+	createdAt: text('created_at').$defaultFn(() => new Date().toISOString())
+});

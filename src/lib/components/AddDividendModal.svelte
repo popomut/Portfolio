@@ -9,6 +9,7 @@
 		currency,
 		currentShares,
 		editDividend = null,
+		apiBase = '/api',
 		onclose
 	}: {
 		open: boolean;
@@ -16,6 +17,7 @@
 		currency: string;
 		currentShares: number;
 		editDividend: Dividend | null;
+		apiBase?: string;
 		onclose: (saved: boolean) => void;
 	} = $props();
 
@@ -106,13 +108,13 @@
 
 			let res;
 			if (editDividend) {
-				res = await fetch(`/api/dividends/${editDividend.id}`, {
+				res = await fetch(`${apiBase}/dividends/${editDividend.id}`, {
 					method: 'PUT',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(body)
 				});
 			} else {
-				res = await fetch('/api/dividends', {
+				res = await fetch(`${apiBase}/dividends`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(body)

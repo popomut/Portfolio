@@ -7,6 +7,7 @@
 		transactions,
 		totalShares,
 		currentPrice,
+		apiBase = '/api',
 		onclose
 	}: {
 		open: boolean;
@@ -14,6 +15,7 @@
 		transactions: Transaction[];
 		totalShares: number;
 		currentPrice: number;
+		apiBase?: string;
 		onclose: (saved: boolean) => void;
 	} = $props();
 
@@ -223,7 +225,7 @@
 		if (!canSubmit) return;
 		loading = true; error = '';
 		try {
-			const res = await fetch('/api/transactions', {
+			const res = await fetch(`${apiBase}/transactions`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({

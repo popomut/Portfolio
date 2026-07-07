@@ -63,6 +63,44 @@ export const load: LayoutServerLoad = async () => {
 		});
 	}
 
+	// Ensure SETMAI Fund nav item exists
+	const hasSetmaiFund = items.some(i => i.href === '/setmai-fund');
+	if (!hasSetmaiFund) {
+		await db.insert(navItem).values({
+			label: 'SETMAI Fund',
+			href: '/setmai-fund',
+			icon: 'bar-chart-2',
+			sortOrder: 7
+		});
+		items.push({
+			id: 'generated-setmai-fund',
+			label: 'SETMAI Fund',
+			href: '/setmai-fund',
+			icon: 'bar-chart-2',
+			parentId: null,
+			sortOrder: 7
+		});
+	}
+
+	// Ensure SETMAI Closed Positions nav item exists
+	const hasSetmaiClosed = items.some(i => i.href === '/setmai-fund/closed-positions');
+	if (!hasSetmaiClosed) {
+		await db.insert(navItem).values({
+			label: 'SETMAI Closed',
+			href: '/setmai-fund/closed-positions',
+			icon: 'circle',
+			sortOrder: 8
+		});
+		items.push({
+			id: 'generated-setmai-closed',
+			label: 'SETMAI Closed',
+			href: '/setmai-fund/closed-positions',
+			icon: 'circle',
+			parentId: null,
+			sortOrder: 8
+		});
+	}
+
 	// Build tree: top-level items with their children
 	const roots = items.filter((i) => i.parentId === null);
 	const tree = roots.map((root) => ({

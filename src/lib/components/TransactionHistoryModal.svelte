@@ -10,6 +10,7 @@
 		currentPrice,
 		currentShares,
 		stockCurrency,
+		apiBase = '/api',
 		onclose,
 		onedit,
 		ondelete
@@ -20,6 +21,7 @@
 		currentPrice: number;
 		currentShares: number;
 		stockCurrency: string;
+		apiBase?: string;
 		onclose: () => void;
 		onedit: (tx: Transaction) => void;
 		ondelete: (id: string) => Promise<void>;
@@ -45,8 +47,8 @@
 		loading = true;
 		try {
 			const [txRes, divRes] = await Promise.all([
-				fetch(`/api/transactions?ticker=${encodeURIComponent(ticker)}`),
-				fetch(`/api/dividends?ticker=${encodeURIComponent(ticker)}`)
+				fetch(`${apiBase}/transactions?ticker=${encodeURIComponent(ticker)}`),
+				fetch(`${apiBase}/dividends?ticker=${encodeURIComponent(ticker)}`)
 			]);
 			transactions = await txRes.json();
 			dividends = await divRes.json();
@@ -64,7 +66,7 @@
 	}
 
 	async function handleDeleteDividend(id: string) {
-		await fetch(`/api/dividends/${id}`, { method: 'DELETE' });
+		await fetch(`${apiBase}/dividends/${id}`, { method: 'DELETE' });
 		dividends = dividends.filter((d) => d.id !== id);
 		deleteDivConfirm = null;
 	}
@@ -321,6 +323,7 @@
 			currency={stockCurrency}
 			{currentShares}
 			{editDividend}
+			{apiBase}
 			onclose={async (saved) => {
 				dividendModalOpen = false;
 				editDividend = null;

@@ -1,0 +1,630 @@
+<script lang="ts">
+import { invalidateAll } from '$app/navigation';
+import AddTransactionModal from '$lib/components/AddTransactionModal.svelte';
+import AddDividendModal from '$lib/components/AddDividendModal.svelte';
+import TransactionHistoryModal from '$lib/components/TransactionHistoryModal.svelte';
+import DeleteStockModal from '$lib/components/DeleteStockModal.svelte';
+import SellModal from '$lib/components/SellModal.svelte';
+import PortfolioChart from '$lib/components/PortfolioChart.svelte';
+import type { PortfolioItem, Transaction } from '$lib/utils/portfolio';
+
+let { data } = $props();
+
+const API_BASE = '/api/setmai';
+const CURRENCY = 'THB';
+
+let showAddModal = $state(false);
+let editTransaction = $state<Transaction | null>(null);
+let historyTicker = $state<string | null>(null);
+let historyItem = $state<PortfolioItem | null>(null);
+let deleteItem = $state<PortfolioItem | null>(null);
+let deleting = $state(false);
+let sellItem = $state<PortfolioItem | null>(null);
+let dividendItem = $state<PortfolioItem | null>(null);
+let fetchingPrices = $state(false);
+let stalePrices = $state<Set<string>>(new Set());
+let fetchingTicker = $state<string | null>(null);
+
+let sortColumn = $state<string>('ticker');
+let sortAsc = $state(true);
+
+// Rebalance state
+let rebalanceMode = $state<'equal' | 'amount' | 'target'>('equal');
+let targetAmountPerStock = $state('20000');
+let targetTotalValue = $state('');
+
+function openAdd() {
+	editTransaction = null;
+	showAddModal = true;
+}
+
+function openHistory(item: PortfolioItem) {
+	historyItem = item;
+	historyTicker = item.ticker;
+}
+
+function openSell(item: PortfolioItem) {
+	sellItem = item;
+}
+
+function openDividend(item: PortfolioItem) {
+	dividendItem = item;
+}
+
+function handleEdit(tx: Transaction) {
+	historyTicker = null;
+	historyItem = null;
+	editTransaction = tx;
+	showAddModal = true;
+}
+
+async function handleDeleteTransaction(id: string) {
+	await fetch(`${API_BASE}/transactions/${id}`, { method: 'DELETE' });
+	await invalidateAll();
+}
+
+async function confirmDeleteStock() {
+	if (!deleteItem || deleting) return;
+	deleting = true;
+	try {
+		await fetch(`${API_BASE}/stocks/${deleteItem.ticker}`, { method: 'DELETE' });
+		await invalidateAll();
+	} finally {
+		deleting = false;
+		deleteItem = null;
+	}
+}
+
+function fmtCurrency(v: number) {
+	return new Intl.NumberFormat('en-US', { style: 'currency', currency: CURRENCY, minimumFractionDigits: 2 }).format(v);
+}
+
+function fmtCurrency0(v: number) {
+	return new Intl.NumberFormat('en-US', { style: 'currency', currency: CURRENCY, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+}
+
+function fmtPct(v: number) {
+	return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+}
+
+function fmtIrr(v: number | null) {
+	if (v === null) return '—';
+	return (v * 100).toFixed(1) + '%';
+}
+
+async function updatePrice(ticker: string, currentPrice: number) {
+	const input = prompt(`Update price for ${ticker}:`, String(currentPrice));
+	if (input === null) return;
+	const price = parseFloat(input);
+	if (isNaN(price)) return;
+	await fetch(`${API_BASE}/stocks/${ticker}`, {
+		method: 'PATCH',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ currentPrice: price })
+	});
+	await invalidateAll();
+}
+
+async function fetchCurrentPrices() {
+	fetchingPrices = true;
+	stalePrices = new Set();
+
+	try {
+		const stocks = data.summary.items;
+
+		for (const stock of stocks) {
+			fetchingTicker = stock.ticker;
+
+			try {
+				const response = await fetch(`${API_BASE}/stocks/prices`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ ticker: stock.ticker })
+				});
+
+				const result = await response.json();
+
+				if (!response.ok) {
+					stalePrices.add(stock.ticker);
+					continue;
+				}
+
+				if (result.errors && result.errors.length > 0) {
+					result.errors.forEach((e: any) => stalePrices.add(e.ticker));
+				}
+			} catch (err) {
+				stalePrices.add(stock.ticker);
+			}
+		}
+
+		await invalidateAll();
+	} finally {
+		fetchingPrices = false;
+		fetchingTicker = null;
+	}
+}
+
+function toggleSort(col: string) {
+	if (sortColumn === col) sortAsc = !sortAsc;
+	else { sortColumn = col; sortAsc = true; }
+}
+
+function getSortedItems() {
+	const items = [...data.summary.items];
+	items.sort((a, b) => {
+		let aVal: any = (a as any)[sortColumn];
+		let bVal: any = (b as any)[sortColumn];
+		if (typeof aVal === 'number' && typeof bVal === 'number') return sortAsc ? aVal - bVal : bVal - aVal;
+		if (typeof aVal === 'string' && typeof bVal === 'string') return sortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+		return 0;
+	});
+	return items;
+}
+
+// ── Rebalance calculations ─────────────────────────────────────
+type RebalanceRow = {
+	ticker: string;
+	shares: number;
+	currentPrice: number;
+	marketValue: number;
+	currentWeight: number;
+	targetValue: number;
+	targetWeight: number;
+	diff: number;
+	sharesToTrade: number;
+	action: 'BUY' | 'SELL' | 'HOLD';
+};
+
+let rebalanceRows = $derived.by<RebalanceRow[]>(() => {
+	const items = data.summary.items;
+	if (items.length === 0) return [];
+
+	const totalMV = data.summary.totalMarketValue;
+	const n = items.length;
+
+	let totalTarget: number;
+	if (rebalanceMode === 'equal') {
+		totalTarget = totalMV;
+	} else if (rebalanceMode === 'amount') {
+		const perStock = parseFloat(targetAmountPerStock) || 0;
+		totalTarget = perStock * n;
+	} else {
+		totalTarget = parseFloat(targetTotalValue) || totalMV;
+	}
+
+	const perTicker = n > 0 ? totalTarget / n : 0;
+
+	return items.map((it) => {
+		const currentWeight = totalMV > 0 ? (it.marketValue / totalMV) * 100 : 0;
+		const targetValue = perTicker;
+		const targetWeight = totalTarget > 0 ? (targetValue / totalTarget) * 100 : 0;
+		const diff = targetValue - it.marketValue;
+		const sharesToTrade = it.currentPrice > 0 ? diff / it.currentPrice : 0;
+		let action: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
+		if (sharesToTrade > 0.01) action = 'BUY';
+		else if (sharesToTrade < -0.01) action = 'SELL';
+		return {
+			ticker: it.ticker,
+			shares: it.shares,
+			currentPrice: it.currentPrice,
+			marketValue: it.marketValue,
+			currentWeight,
+			targetValue,
+			targetWeight,
+			diff,
+			sharesToTrade,
+			action
+		};
+	});
+});
+
+let totalNetTrade = $derived(rebalanceRows.reduce((s, r) => s + r.diff, 0));
+</script>
+
+<div class="space-y-6">
+<!-- Page header -->
+<div class="flex items-center justify-between">
+	<div>
+		<h1 class="text-2xl font-bold text-slate-800">SETMAI Fund</h1>
+		<p class="text-sm text-slate-500">Long-term SET stock picks · rebalanced quarterly</p>
+	</div>
+	<a
+		href="/setmai-fund/closed-positions"
+		class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+	>
+		View Closed Positions →
+	</a>
+</div>
+
+<!-- Summary bar -->
+<div class="space-y-3">
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Market Value</p>
+<p class="mt-1 text-xl font-bold text-slate-800">{fmtCurrency(data.summary.totalMarketValue)}</p>
+</div>
+<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Cost Basis</p>
+<p class="mt-1 text-xl font-bold text-slate-800">{fmtCurrency(data.summary.totalCostBasis)}</p>
+</div>
+<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Positions</p>
+<p class="mt-1 text-xl font-bold text-slate-800">{data.summary.items.length}</p>
+</div>
+<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Unrealized Gains</p>
+<p class="mt-1 text-xl font-bold" class:text-green-600={data.summary.totalPnl >= 0} class:text-red-600={data.summary.totalPnl < 0}>
+{fmtCurrency(data.summary.totalPnl)} ({fmtPct(data.summary.totalPnlPct)})
+</p>
+</div>
+<div class="rounded-xl border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-cyan-700 uppercase tracking-wide">Realized (Open)</p>
+<p class="mt-1 text-xl font-bold" class:text-green-700={(data.summary.totalRealizedPnl ?? 0) >= 0} class:text-red-700={(data.summary.totalRealizedPnl ?? 0) < 0}>{fmtCurrency(data.summary.totalRealizedPnl ?? 0)}</p>
+</div>
+<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-amber-700 uppercase tracking-wide">Realized (Closed)</p>
+<p class="mt-1 text-xl font-bold" class:text-green-700={(data.totalRealizedGains ?? 0) >= 0} class:text-red-700={(data.totalRealizedGains ?? 0) < 0}>{fmtCurrency(data.totalRealizedGains ?? 0)}</p>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+<div class="rounded-xl border border-orange-200 bg-orange-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-orange-700 uppercase tracking-wide">Total Realized</p>
+<p class="mt-1 text-xl font-bold" class:text-green-700={((data.summary.totalRealizedPnl ?? 0) + (data.totalRealizedGains ?? 0)) >= 0} class:text-red-700={((data.summary.totalRealizedPnl ?? 0) + (data.totalRealizedGains ?? 0)) < 0}>{fmtCurrency((data.summary.totalRealizedPnl ?? 0) + (data.totalRealizedGains ?? 0))}</p>
+</div>
+<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-emerald-700 uppercase tracking-wide">Open Dividends</p>
+<p class="mt-1 text-xl font-bold text-emerald-700">{fmtCurrency(data.summary.totalDividends)}</p>
+</div>
+<div class="rounded-xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-blue-700 uppercase tracking-wide">Closed Dividends</p>
+<p class="mt-1 text-xl font-bold text-blue-700">{fmtCurrency(data.closedDividends ?? 0)}</p>
+</div>
+<div class="rounded-xl border border-violet-200 bg-violet-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-violet-700 uppercase tracking-wide">Total Dividends</p>
+<p class="mt-1 text-xl font-bold text-violet-700">{fmtCurrency(data.summary.totalDividends + (data.closedDividends ?? 0))}</p>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+<div class="rounded-xl border border-teal-200 bg-teal-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-teal-700 uppercase tracking-wide">Annual Dividend</p>
+<p class="mt-1 text-xl font-bold text-teal-700">{fmtCurrency(data.summary.totalAnnualDividend)}</p>
+</div>
+<div class="rounded-xl border border-violet-200 bg-violet-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-violet-700 uppercase tracking-wide">Yield on Cost</p>
+<p class="mt-1 text-xl font-bold text-violet-700">{data.summary.portfolioYieldOnCost !== null ? data.summary.portfolioYieldOnCost.toFixed(2) + '%' : '—'}</p>
+</div>
+<div class="rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+<p class="text-xs font-medium text-rose-700 uppercase tracking-wide">Fund IRR</p>
+<p class="mt-1 text-xl font-bold" class:text-green-700={(data.portfolioIRR ?? 0) >= 0} class:text-red-700={(data.portfolioIRR ?? 0) < 0}>{fmtIrr(data.portfolioIRR)}</p>
+</div>
+</div>
+</div>
+
+<!-- Chart -->
+{#if data.summary.items.length > 0}
+<PortfolioChart items={data.summary.items} />
+{/if}
+
+<!-- Rebalance section -->
+{#if data.summary.items.length > 0}
+<div class="rounded-xl border border-slate-200 bg-white shadow-sm">
+	<div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+		<div>
+			<h2 class="text-base font-semibold text-slate-800">Rebalance</h2>
+			<p class="text-xs text-slate-500">Compute shares to buy/sell to reach target allocation.</p>
+		</div>
+		<div class="flex flex-wrap items-center gap-2">
+			<div class="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-medium">
+				<button
+					onclick={() => rebalanceMode = 'equal'}
+					class="rounded-md px-3 py-1 transition-colors"
+					class:bg-white={rebalanceMode === 'equal'}
+					class:text-indigo-600={rebalanceMode === 'equal'}
+					class:shadow-sm={rebalanceMode === 'equal'}
+					class:text-slate-500={rebalanceMode !== 'equal'}
+				>Equal (current MV)</button>
+				<button
+					onclick={() => rebalanceMode = 'amount'}
+					class="rounded-md px-3 py-1 transition-colors"
+					class:bg-white={rebalanceMode === 'amount'}
+					class:text-indigo-600={rebalanceMode === 'amount'}
+					class:shadow-sm={rebalanceMode === 'amount'}
+					class:text-slate-500={rebalanceMode !== 'amount'}
+				>Fixed per stock</button>
+				<button
+					onclick={() => rebalanceMode = 'target'}
+					class="rounded-md px-3 py-1 transition-colors"
+					class:bg-white={rebalanceMode === 'target'}
+					class:text-indigo-600={rebalanceMode === 'target'}
+					class:shadow-sm={rebalanceMode === 'target'}
+					class:text-slate-500={rebalanceMode !== 'target'}
+				>Total target</button>
+			</div>
+			{#if rebalanceMode === 'amount'}
+				<label class="flex items-center gap-2 text-xs text-slate-600">
+					Per stock:
+					<input
+						type="number"
+						step="any"
+						bind:value={targetAmountPerStock}
+						class="w-28 rounded-md border border-slate-300 px-2 py-1 text-sm"
+					/>
+				</label>
+			{:else if rebalanceMode === 'target'}
+				<label class="flex items-center gap-2 text-xs text-slate-600">
+					Total fund:
+					<input
+						type="number"
+						step="any"
+						bind:value={targetTotalValue}
+						placeholder={String(Math.round(data.summary.totalMarketValue))}
+						class="w-32 rounded-md border border-slate-300 px-2 py-1 text-sm"
+					/>
+				</label>
+			{/if}
+		</div>
+	</div>
+
+	<div class="overflow-x-auto">
+		<table class="min-w-full text-sm">
+			<thead>
+				<tr class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+					<th class="px-4 py-2 text-left font-semibold">Ticker</th>
+					<th class="px-4 py-2 text-right font-semibold">Shares</th>
+					<th class="px-4 py-2 text-right font-semibold">Price</th>
+					<th class="px-4 py-2 text-right font-semibold">Market Value</th>
+					<th class="px-4 py-2 text-right font-semibold">Current %</th>
+					<th class="px-4 py-2 text-right font-semibold">Target Value</th>
+					<th class="px-4 py-2 text-right font-semibold">Target %</th>
+					<th class="px-4 py-2 text-right font-semibold">Diff</th>
+					<th class="px-4 py-2 text-right font-semibold">Shares to Trade</th>
+					<th class="px-4 py-2 text-center font-semibold">Action</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-slate-100">
+				{#each rebalanceRows as r (r.ticker)}
+					<tr>
+						<td class="px-4 py-2.5 font-semibold text-slate-800">{r.ticker}</td>
+						<td class="px-4 py-2.5 text-right text-slate-700">{r.shares.toFixed(2)}</td>
+						<td class="px-4 py-2.5 text-right text-slate-700">{fmtCurrency(r.currentPrice)}</td>
+						<td class="px-4 py-2.5 text-right text-slate-700">{fmtCurrency0(r.marketValue)}</td>
+						<td class="px-4 py-2.5 text-right text-slate-600">
+							<div class="flex items-center justify-end gap-1.5">
+								<div class="h-1.5 w-14 overflow-hidden rounded-full bg-slate-100">
+									<div class="h-full rounded-full bg-indigo-400" style="width:{Math.min(100, r.currentWeight)}%"></div>
+								</div>
+								<span class="w-10 text-right text-xs">{r.currentWeight.toFixed(1)}%</span>
+							</div>
+						</td>
+						<td class="px-4 py-2.5 text-right text-slate-700">{fmtCurrency0(r.targetValue)}</td>
+						<td class="px-4 py-2.5 text-right text-slate-600">{r.targetWeight.toFixed(1)}%</td>
+						<td class="px-4 py-2.5 text-right font-medium" class:text-green-600={r.diff > 0} class:text-red-600={r.diff < 0}>
+							{r.diff >= 0 ? '+' : ''}{fmtCurrency0(r.diff)}
+						</td>
+						<td class="px-4 py-2.5 text-right font-medium" class:text-green-600={r.sharesToTrade > 0} class:text-red-600={r.sharesToTrade < 0}>
+							{r.sharesToTrade >= 0 ? '+' : ''}{r.sharesToTrade.toFixed(2)}
+						</td>
+						<td class="px-4 py-2.5 text-center">
+							{#if r.action === 'BUY'}
+								<span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">BUY</span>
+							{:else if r.action === 'SELL'}
+								<span class="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">SELL</span>
+							{:else}
+								<span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">HOLD</span>
+							{/if}
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+			<tfoot>
+				<tr class="border-t-2 border-slate-300 bg-slate-50 font-semibold text-sm">
+					<td class="px-4 py-3 text-slate-700" colspan="3">Net cash to invest</td>
+					<td class="px-4 py-3 text-right text-slate-700">{fmtCurrency0(data.summary.totalMarketValue)}</td>
+					<td class="px-4 py-3 text-right text-slate-500">100%</td>
+					<td class="px-4 py-3 text-right text-slate-700">{fmtCurrency0(rebalanceRows.reduce((s, r) => s + r.targetValue, 0))}</td>
+					<td class="px-4 py-3 text-right text-slate-500">100%</td>
+					<td class="px-4 py-3 text-right font-bold" class:text-green-600={totalNetTrade >= 0} class:text-red-600={totalNetTrade < 0}>
+						{totalNetTrade >= 0 ? '+' : ''}{fmtCurrency0(totalNetTrade)}
+					</td>
+					<td colspan="2"></td>
+				</tr>
+			</tfoot>
+		</table>
+	</div>
+	<div class="border-t border-slate-100 bg-slate-50 px-4 py-2 text-xs text-slate-500">
+		{#if rebalanceMode === 'equal'}
+			Equal weight targets each ticker at <strong>{fmtCurrency0(data.summary.totalMarketValue / (data.summary.items.length || 1))}</strong> — no fresh cash needed, only reshuffling.
+		{:else if rebalanceMode === 'amount'}
+			Each ticker targets <strong>{fmtCurrency0(parseFloat(targetAmountPerStock) || 0)}</strong> ({data.summary.items.length} positions = {fmtCurrency0((parseFloat(targetAmountPerStock) || 0) * data.summary.items.length)} total).
+		{:else}
+			Fund total target: <strong>{fmtCurrency0(parseFloat(targetTotalValue) || data.summary.totalMarketValue)}</strong>.
+		{/if}
+	</div>
+</div>
+{/if}
+
+<!-- Table header -->
+<div class="flex items-center justify-between">
+<h2 class="text-lg font-semibold text-slate-800">Holdings</h2>
+<div class="flex gap-2">
+	<button
+	onclick={openAdd}
+	class="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+	>
+	<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+	</svg>
+	Add Transaction
+	</button>
+	<button
+	onclick={fetchCurrentPrices}
+	disabled={fetchingPrices}
+	class="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+	>
+	<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+	</svg>
+	{#if fetchingPrices}Fetching…{:else}Fetch Prices{/if}
+	</button>
+</div>
+</div>
+
+<!-- Stock table -->
+{#if data.summary.items.length === 0}
+<div class="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
+<p class="text-slate-500">No SETMAI holdings yet. Add a transaction to get started.</p>
+</div>
+{:else}
+<div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+<table class="min-w-full text-sm">
+<thead>
+<tr class="border-b border-slate-200 bg-slate-50">
+<th class="px-4 py-3 text-left font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('ticker')}>Ticker {sortColumn === 'ticker' ? (sortAsc ? '↑' : '↓') : ''}</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('shares')}>Shares {sortColumn === 'shares' ? (sortAsc ? '↑' : '↓') : ''}</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('avgCost')}>Avg Cost {sortColumn === 'avgCost' ? (sortAsc ? '↑' : '↓') : ''}</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('currentPrice')}>Current Price {sortColumn === 'currentPrice' ? (sortAsc ? '↑' : '↓') : ''}</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('marketValue')}>Market Value {sortColumn === 'marketValue' ? (sortAsc ? '↑' : '↓') : ''}</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('pnl')}>P&amp;L $ {sortColumn === 'pnl' ? (sortAsc ? '↑' : '↓') : ''}</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('pnlPct')}>P&amp;L % {sortColumn === 'pnlPct' ? (sortAsc ? '↑' : '↓') : ''}</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('realizedPnl')}>Realized P/L {sortColumn === 'realizedPnl' ? (sortAsc ? '↑' : '↓') : ''}</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('irr')}>IRR {sortColumn === 'irr' ? (sortAsc ? '↑' : '↓') : ''}</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('totalDividends')}>Dividends {sortColumn === 'totalDividends' ? (sortAsc ? '↑' : '↓') : ''}</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600 cursor-pointer hover:bg-slate-100" onclick={() => toggleSort('yieldOnCost')}>YoC {sortColumn === 'yieldOnCost' ? (sortAsc ? '↑' : '↓') : ''}</th>
+<th class="px-4 py-3 text-right font-semibold text-slate-600">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100">
+{#each getSortedItems() as item (item.ticker)}
+<tr class="cursor-pointer hover:bg-slate-50 transition-colors" onclick={() => openHistory(item)}>
+<td class="px-4 py-3">
+<div class="font-bold text-slate-800">{item.ticker}</div>
+{#if item.name}<div class="text-xs text-slate-400">{item.name}</div>{/if}
+</td>
+<td class="px-4 py-3 text-right text-slate-700">{item.shares.toFixed(4)}</td>
+<td class="px-4 py-3 text-right text-slate-700">{fmtCurrency(item.avgCost)}</td>
+<td class="px-4 py-3 text-right">
+<div class="flex items-center justify-end gap-2">
+	<button class="text-slate-700 hover:text-indigo-600 hover:underline" onclick={(e) => { e.stopPropagation(); updatePrice(item.ticker, item.currentPrice); }} title="Click to update price">
+		{fmtCurrency(item.currentPrice)}
+	</button>
+	{#if stalePrices.has(item.ticker)}
+		<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-label="Price could not be fetched">
+			<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+		</svg>
+	{/if}
+</div>
+</td>
+<td class="px-4 py-3 text-right text-slate-700">{fmtCurrency(item.marketValue)}</td>
+<td class="px-4 py-3 text-right font-medium" class:text-green-600={item.pnl >= 0} class:text-red-600={item.pnl < 0}>{fmtCurrency(item.pnl)}</td>
+<td class="px-4 py-3 text-right font-medium" class:text-green-600={item.pnlPct >= 0} class:text-red-600={item.pnlPct < 0}>{fmtPct(item.pnlPct)}</td>
+<td class="px-4 py-3 text-right font-medium" class:text-green-600={item.realizedPnl >= 0} class:text-red-600={item.realizedPnl < 0}>{item.realizedPnl !== 0 ? fmtCurrency(item.realizedPnl) : '—'}</td>
+<td class="px-4 py-3 text-right text-slate-700">{fmtIrr(item.irr)}</td>
+<td class="px-4 py-3 text-right font-medium">
+{#if item.totalDividends > 0}<span class="text-emerald-600">{fmtCurrency(item.totalDividends)}</span>{:else}<span class="text-slate-300">—</span>{/if}
+</td>
+<td class="px-4 py-3 text-right font-medium">
+{#if item.yieldOnCost !== null}<span class="text-violet-600">{item.yieldOnCost.toFixed(2)}%</span>{:else}<span class="text-slate-300">—</span>{/if}
+</td>
+<td class="px-4 py-3 text-right">
+<div class="flex items-center justify-end gap-3">
+<button class="text-xs text-indigo-600 hover:underline" onclick={(e) => { e.stopPropagation(); openHistory(item); }}>History</button>
+<button class="text-xs font-medium text-emerald-600 hover:underline" onclick={(e) => { e.stopPropagation(); openDividend(item); }}>Dividend</button>
+<button class="text-xs font-medium text-red-600 hover:underline" onclick={(e) => { e.stopPropagation(); openSell(item); }}>Sell</button>
+<button class="text-xs text-slate-400 hover:text-red-500 hover:underline" onclick={(e) => { e.stopPropagation(); deleteItem = item; }}>Delete</button>
+</div>
+</td>
+</tr>
+{/each}
+</tbody>
+</table>
+</div>
+{/if}
+</div>
+
+<!-- Add/Edit Transaction Modal -->
+<AddTransactionModal
+open={showAddModal}
+{editTransaction}
+apiBase={API_BASE}
+onclose={async (saved) => {
+	showAddModal = false;
+	editTransaction = null;
+	if (saved) await invalidateAll();
+}}
+/>
+
+<!-- Transaction History Modal -->
+{#if historyItem}
+<TransactionHistoryModal
+open={historyTicker !== null}
+ticker={historyItem.ticker}
+stockName={historyItem.name}
+currentPrice={historyItem.currentPrice}
+currentShares={historyItem.shares}
+stockCurrency={historyItem.currency}
+apiBase={API_BASE}
+onclose={() => { historyTicker = null; historyItem = null; }}
+onedit={(tx) => handleEdit(tx)}
+ondelete={async (id) => { await handleDeleteTransaction(id); }}
+/>
+{/if}
+
+<!-- Delete Stock Confirmation Modal -->
+<DeleteStockModal
+open={deleteItem !== null}
+ticker={deleteItem?.ticker ?? ''}
+transactionCount={deleteItem?.transactions?.length ?? 0}
+onconfirm={confirmDeleteStock}
+oncancel={() => deleteItem = null}
+/>
+
+<!-- Sell Modal -->
+{#if sellItem}
+<SellModal
+	open={sellItem !== null}
+	ticker={sellItem.ticker}
+	transactions={sellItem.transactions}
+	totalShares={sellItem.shares}
+	currentPrice={sellItem.currentPrice}
+	apiBase={API_BASE}
+	onclose={async (saved) => {
+		sellItem = null;
+		if (saved) await invalidateAll();
+	}}
+/>
+{/if}
+
+<!-- Add Dividend Modal -->
+{#if dividendItem}
+<AddDividendModal
+	open={dividendItem !== null}
+	ticker={dividendItem.ticker}
+	currency={dividendItem.currency}
+	currentShares={dividendItem.shares}
+	editDividend={null}
+	apiBase={API_BASE}
+	onclose={async (saved) => {
+		dividendItem = null;
+		if (saved) await invalidateAll();
+	}}
+/>
+{/if}
+
+<!-- Fetching Prices Progress Modal -->
+{#if fetchingPrices && fetchingTicker}
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+	<div class="rounded-xl bg-white p-6 shadow-2xl max-w-md">
+		<div class="flex items-center gap-3 mb-4">
+			<div class="relative h-5 w-5">
+				<div class="absolute inset-0 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-600"></div>
+			</div>
+			<h3 class="font-semibold text-slate-800">Fetching Prices</h3>
+		</div>
+		<div class="space-y-2">
+			<p class="text-sm text-slate-600">
+				Currently fetching: <span class="font-mono font-semibold text-emerald-600">{fetchingTicker}</span>
+			</p>
+		</div>
+	</div>
+</div>
+{/if}

@@ -4,10 +4,12 @@
 	let {
 		open,
 		editTransaction = null,
+		apiBase = '/api',
 		onclose
 	}: {
 		open: boolean;
 		editTransaction: Transaction | null;
+		apiBase?: string;
 		onclose: (saved: boolean) => void;
 	} = $props();
 
@@ -69,13 +71,13 @@
 
 			let res;
 			if (editTransaction) {
-				res = await fetch(`/api/transactions/${editTransaction.id}`, {
+				res = await fetch(`${apiBase}/transactions/${editTransaction.id}`, {
 					method: 'PUT',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(body)
 				});
 			} else {
-				res = await fetch('/api/transactions', {
+				res = await fetch(`${apiBase}/transactions`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(body)
