@@ -1,0 +1,3 @@
+[build]
+# Target dir moved out of workspace to avoid antivirus/permission issues on Windows.
+target-dir = "C:/Users/dt77388/.cargo-tauri-portfolio"
