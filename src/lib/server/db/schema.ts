@@ -35,6 +35,14 @@ export const transaction = sqliteTable('transaction', {
 	createdAt: text('created_at').$defaultFn(() => new Date().toISOString())
 });
 
+export const sellLotMatch = sqliteTable('sell_lot_match', {
+	id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+	sellTxnId: text('sell_txn_id').notNull(),
+	buyTxnId: text('buy_txn_id').notNull(),
+	sharesApplied: real('shares_applied').notNull(),
+	createdAt: text('created_at').$defaultFn(() => new Date().toISOString())
+});
+
 export const dividend = sqliteTable('dividend', {
 	id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
 	ticker: text('ticker').notNull(),
@@ -81,6 +89,44 @@ export const setmaiDividend = sqliteTable('setmai_dividend', {
 	totalAmount: real('total_amount').notNull(),
 	withholdingTax: real('withholding_tax').notNull().default(0),
 	currency: text('currency').notNull().default('THB'),
+	notes: text('notes').default(''),
+	createdAt: text('created_at').$defaultFn(() => new Date().toISOString())
+});
+
+// ─── Trend Following (isolated: no dividends; ATR + pyramid tracking) ───
+
+export const trendConfig = sqliteTable('trend_config', {
+	id: text('id').primaryKey().default('config'), // single-row table
+	equity: real('equity').notNull().default(1000000),
+	riskPct: real('risk_pct').notNull().default(1), // % of equity risked per trade
+	atrPeriod: integer('atr_period').notNull().default(20),
+	atrMultStop: real('atr_mult_stop').notNull().default(2), // stop = entry - atrMultStop * ATR
+	atrMultAdd: real('atr_mult_add').notNull().default(1),   // pyramid add every atrMultAdd * ATR up
+	maxUnits: integer('max_units').notNull().default(4),
+	updatedAt: text('updated_at')
+});
+
+export const trendStock = sqliteTable('trend_stock', {
+	ticker: text('ticker').primaryKey(),
+	name: text('name').notNull().default(''),
+	currentPrice: real('current_price').notNull().default(0),
+	currency: text('currency').notNull().default('THB'),
+	atr: real('atr').notNull().default(0), // most recent ATR value
+	atrUpdatedAt: text('atr_updated_at'),
+	updatedAt: text('updated_at')
+});
+
+export const trendTransaction = sqliteTable('trend_transaction', {
+	id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+	ticker: text('ticker').notNull(),
+	type: text('type').notNull(), // 'buy' | 'sell'
+	unitNumber: integer('unit_number').notNull().default(1), // 1..maxUnits (pyramid unit)
+	date: text('date').notNull(),
+	shares: real('shares').notNull(),
+	pricePerShare: real('price_per_share').notNull(),
+	stopPrice: real('stop_price').notNull().default(0), // stop set at entry
+	atrAtEntry: real('atr_at_entry').notNull().default(0), // ATR value used to size
+	fees: real('fees').notNull().default(0),
 	notes: text('notes').default(''),
 	createdAt: text('created_at').$defaultFn(() => new Date().toISOString())
 });

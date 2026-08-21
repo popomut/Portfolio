@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
-import { stock, transaction, dividend } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { stock, transaction, dividend, sellLotMatch } from '$lib/server/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 
 export const PATCH: RequestHandler = async ({ params, request }) => {
   const body = await request.json();
@@ -23,6 +23,12 @@ export const DELETE: RequestHandler = async ({ params }) => {
   const ticker = params.ticker.toUpperCase();
 
   // Delete all related data for this ticker
+  const txnRows = await db.select({ id: transaction.id }).from(transaction).where(eq(transaction.ticker, ticker));
+  const txnIds = txnRows.map((t) => t.id);
+  if (txnIds.length > 0) {
+    await db.delete(sellLotMatch).where(inArray(sellLotMatch.sellTxnId, txnIds));
+    await db.delete(sellLotMatch).where(inArray(sellLotMatch.buyTxnId, txnIds));
+  }
   await db.delete(transaction).where(eq(transaction.ticker, ticker));
   await db.delete(dividend).where(eq(dividend.ticker, ticker));
 

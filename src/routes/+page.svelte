@@ -6,6 +6,7 @@ import TransactionHistoryModal from '$lib/components/TransactionHistoryModal.sve
 import DeleteStockModal from '$lib/components/DeleteStockModal.svelte';
 import SellModal from '$lib/components/SellModal.svelte';
 import PortfolioChart from '$lib/components/PortfolioChart.svelte';
+import SpecificIdPopover from '$lib/components/SpecificIdPopover.svelte';
 import type { PortfolioItem, Transaction } from '$lib/utils/portfolio';
 
 let { data } = $props();
@@ -25,6 +26,9 @@ let fetchingTicker = $state<string | null>(null);
 // Sorting
 let sortColumn = $state<string>('ticker');
 let sortAsc = $state(true);
+
+// Ticker click popover (specific-ID P&L view)
+let popoverTicker = $state<string | null>(null);
 
 function openAdd() {
 	editTransaction = null;
@@ -326,10 +330,17 @@ class="cursor-pointer hover:bg-slate-50 transition-colors"
 onclick={() => openHistory(item)}
 >
 <td class="px-4 py-3">
-<div class="font-bold text-slate-800">{item.ticker}</div>
-{#if item.name}
-<div class="text-xs text-slate-400">{item.name}</div>
-{/if}
+<button
+	type="button"
+	class="text-left"
+	onclick={(e) => { e.stopPropagation(); popoverTicker = item.ticker; }}
+	title="Show specific-lot P&L breakdown"
+>
+	<div class="font-bold text-slate-800 underline decoration-dotted decoration-slate-300 underline-offset-2 hover:decoration-indigo-500">{item.ticker}</div>
+	{#if item.name}
+		<div class="text-xs text-slate-400">{item.name}</div>
+	{/if}
+</button>
 </td>
 <td class="px-4 py-3 text-right text-slate-700">{item.shares.toFixed(4)}</td>
 <td class="px-4 py-3 text-right text-slate-700">{fmtCurrency(item.avgCost)}</td>
@@ -412,6 +423,18 @@ Delete
 </div>
 {/if}
 </div>
+
+<!-- Specific-ID P&L Popover (centered modal) -->
+{#if popoverTicker && data.specificIdByTicker?.[popoverTicker]}
+{@const item = data.summary.items.find((i) => i.ticker === popoverTicker)}
+{#if item}
+	<SpecificIdPopover
+		breakdown={data.specificIdByTicker[popoverTicker]}
+		currency={item.currency}
+		onclose={() => (popoverTicker = null)}
+	/>
+{/if}
+{/if}
 
 <!-- Add/Edit Transaction Modal -->
 <AddTransactionModal

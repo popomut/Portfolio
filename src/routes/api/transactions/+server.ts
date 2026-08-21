@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
-import { transaction, stock } from '$lib/server/db/schema';
+import { transaction, stock, sellLotMatch } from '$lib/server/db/schema';
 import { eq, asc } from 'drizzle-orm';
 
 export const GET: RequestHandler = async ({ url }) => {
@@ -17,7 +17,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 export const POST: RequestHandler = async ({ request }) => {
   const body = await request.json();
-  const { ticker, type, date, shares, pricePerShare, fees = 0, notes = '' } = body;
+  const { ticker, type, date, shares, pricePerShare, fees = 0, notes = '', lotMatches } = body;
 
   if (!ticker || !type || !date || shares == null || pricePerShare == null) {
     return json({ error: 'Missing required fields' }, { status: 400 });
@@ -32,6 +32,21 @@ export const POST: RequestHandler = async ({ request }) => {
     fees: Number(fees),
     notes: notes || ''
   }).returning();
+
+  if (type === 'sell' && Array.isArray(lotMatches) && lotMatches.length > 0) {
+    const rows = lotMatches
+      .filter((m: { buyTxnId?: string; sharesApplied?: number }) =>
+        m && m.buyTxnId && Number(m.sharesApplied) > 0
+      )
+      .map((m: { buyTxnId: string; sharesApplied: number }) => ({
+        sellTxnId: tx.id,
+        buyTxnId: m.buyTxnId,
+        sharesApplied: Number(m.sharesApplied)
+      }));
+    if (rows.length > 0) {
+      await db.insert(sellLotMatch).values(rows);
+    }
+  }
 
   // Upsert stock
   await db.insert(stock).values({

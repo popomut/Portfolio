@@ -225,6 +225,13 @@
 		if (!canSubmit) return;
 		loading = true; error = '';
 		try {
+			const lotMatches = selectedLots
+				.map((l) => ({
+					buyTxnId: l.id,
+					sharesApplied: parseFloat(lotState[l.id]?.sharesToSell ?? '0') || 0
+				}))
+				.filter((m) => m.sharesApplied > 0);
+
 			const res = await fetch(`${apiBase}/transactions`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -233,7 +240,8 @@
 					shares: totalSharesToSell,
 					pricePerShare: parseFloat(sellPrice),
 					fees: parseFloat(fees) || 0,
-					notes: notes || `Sold ${fmtShares(totalSharesToSell)} sh from ${selectedLots.length} lot(s): ${selectedLots.map((l) => l.date).join(', ')}`
+					notes: notes || `Sold ${fmtShares(totalSharesToSell)} sh from ${selectedLots.length} lot(s): ${selectedLots.map((l) => l.date).join(', ')}`,
+					lotMatches
 				})
 			});
 			if (res.ok) {

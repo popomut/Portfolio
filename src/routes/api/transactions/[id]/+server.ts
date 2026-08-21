@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
-import { transaction, stock } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { transaction, stock, sellLotMatch } from '$lib/server/db/schema';
+import { eq, or } from 'drizzle-orm';
 
 export const PUT: RequestHandler = async ({ params, request }) => {
   const body = await request.json();
@@ -20,6 +20,10 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 export const DELETE: RequestHandler = async ({ params }) => {
   const [deleted] = await db.delete(transaction).where(eq(transaction.id, params.id)).returning();
   if (!deleted) return json({ error: 'Not found' }, { status: 404 });
+
+  await db.delete(sellLotMatch).where(
+    or(eq(sellLotMatch.sellTxnId, params.id), eq(sellLotMatch.buyTxnId, params.id))
+  );
 
   const remaining = await db.select().from(transaction).where(eq(transaction.ticker, deleted.ticker));
   if (remaining.length === 0) {

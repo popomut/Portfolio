@@ -3,8 +3,20 @@ import { db } from '$lib/server/db';
 import { navItem } from '$lib/server/db/schema';
 import { asc } from 'drizzle-orm';
 
+const FALLBACK_NAV_TREE = [
+	{ id: 'fallback-settings', label: 'Settings', href: '/settings', icon: 'settings', parentId: null, sortOrder: 0, children: [] }
+];
+
 export const load: LayoutServerLoad = async () => {
-	const items = await db.select().from(navItem).orderBy(asc(navItem.sortOrder));
+	let items;
+	try {
+		items = await db.select().from(navItem).orderBy(asc(navItem.sortOrder));
+	} catch (err) {
+		// Likely a fresh install where the DB has no tables yet.
+		// Fall back to a minimal nav so the user can reach /settings and run "Create Missing Tables".
+		console.warn('[layout] nav_item query failed — showing fallback nav:', (err as Error).message);
+		return { navTree: FALLBACK_NAV_TREE };
+	}
 
 	// Ensure Settings nav item exists
 	const hasSettings = items.some(i => i.href === '/settings');
@@ -79,6 +91,44 @@ export const load: LayoutServerLoad = async () => {
 			icon: 'bar-chart-2',
 			parentId: null,
 			sortOrder: 7
+		});
+	}
+
+	// Ensure Trend Following nav item exists
+	const hasTrendFollowing = items.some(i => i.href === '/trend-following');
+	if (!hasTrendFollowing) {
+		await db.insert(navItem).values({
+			label: 'Trend Following',
+			href: '/trend-following',
+			icon: 'bar-chart-2',
+			sortOrder: 9
+		});
+		items.push({
+			id: 'generated-trend-following',
+			label: 'Trend Following',
+			href: '/trend-following',
+			icon: 'bar-chart-2',
+			parentId: null,
+			sortOrder: 9
+		});
+	}
+
+	// Ensure Trend Following Closed nav item exists
+	const hasTrendClosed = items.some(i => i.href === '/trend-following/closed');
+	if (!hasTrendClosed) {
+		await db.insert(navItem).values({
+			label: 'Trend Closed',
+			href: '/trend-following/closed',
+			icon: 'circle',
+			sortOrder: 10
+		});
+		items.push({
+			id: 'generated-trend-closed',
+			label: 'Trend Closed',
+			href: '/trend-following/closed',
+			icon: 'circle',
+			parentId: null,
+			sortOrder: 10
 		});
 	}
 
